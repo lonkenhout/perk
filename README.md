@@ -9,5 +9,3 @@ Bachelor project 2021
 - `bin/pears_server [ARGS]` for running server
 - `bin/pears_client [ARGS]` for running client
 
-## Folder structure
-- `src/` for PEARS source files
