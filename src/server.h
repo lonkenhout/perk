@@ -2,7 +2,7 @@
 #define __PEARS_SERVER_H__
 
 #include <stdio.h>
-
+#include <sys/epoll.h>
 
 #include <glib.h>
 
@@ -13,6 +13,7 @@
 #define DEFAULT_PORT	(4944)
 
 
+#define MAX_EVENTS (20)
 
 
 #endif

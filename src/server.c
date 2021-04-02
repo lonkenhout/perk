@@ -6,6 +6,7 @@
 
 static GHashTable *ght = NULL;
 static PEARS_SVR_CTX *psc = NULL;
+static PEARS_CLIENT_COLL *conns = NULL;
 
 /* usage */
 void print_usage(char *cmd){
@@ -68,12 +69,86 @@ void pears_kv_list_all(){
 	g_list_free(values);
 }
 
-void server(){
-    int done = 0;
-    while(!done){
-        //poll for requests
-        //process active requests
-        done = 1;
+void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns){
+	struct epoll_event ev, events[MAX_EVENTS];
+	int epollfd, n_fds;
+    int i, res = 0, done = 0;
+    debug("preparing poll\n");
+	epollfd = epoll_create1(0);
+	if(epollfd == -1) {
+		log_err("epoll_create1() failed");
+		return;
+	}
+
+	debug("adding event channel to poll fds\n");
+	/* add event channel to fds polled on */
+	ev.events = EPOLLIN;
+	ev.data.fd = psc->cm_ec->fd;
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, psc->cm_ec->fd, &ev) == -1) {
+		log_err("epoll_ctl() failed");
+		return;
+	}
+	//TODO: self-pipe trick so we can intercept ctrl-c
+
+    while(1){
+        n_fds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+		if(n_fds == -1) {
+			log_err("epoll_wait() failed");
+			return;
+		}
+
+		for(i = 0; i < n_fds; ++i) {
+			if(events[i].data.fd == psc->cm_ec->fd) {
+				//TODO: add handler:
+				//		for RDMA_CM_EVENT_CONNECT_REQUEST
+				//		and RDMA_CM_EVENT_DISCONNECTED
+				debug("cm event channel ready\n");
+				/* take first available slot setup new connection there */
+				PEARS_CLIENT_CONN *pc_conn = &(conns->clients[conns->count]);
+
+				debug("client request received");
+				res = wait_for_client_conn(psc, pc_conn);
+				if(res) {
+					log_err("wait_for_client_conn() failed");
+					exit(1);
+				}
+
+				/* setup resources for that client */
+				res = init_server_client_resources(pc_conn);
+				if(res) {
+					log_err("init_server_client_resources() failed");
+					exit(1);
+				}
+
+				res = accept_client_conn(psc, pc_conn);
+				if(res) {
+					log_err("accept_client_conn() failed");
+					exit(1);
+				}
+
+				res = send_md_s2c(pc_conn);
+				if(res) {
+					log_err("send_md_s2c() failed");
+					exit(1);
+				}
+
+				res = disconnect_client_conn(psc, pc_conn);
+				if(res) {
+					log_err("disconnect_client_conn() failed");
+					exit(1);
+				}
+
+				destroy_server_dev(psc);
+				pears_kv_destroy();
+				free(psc);
+				free(conns);
+				printf("Cleanup complete, exiting..\n");
+				exit(0);
+			} else {
+				//process connected clients request
+				debug("nothing done here yet");
+			}
+		}
     }
 }
 
@@ -98,72 +173,27 @@ int main(int argc, char **argv){
 	}
 
 	/* prepare resources for a single client connection */
-	PEARS_CLIENT_CONN *pc_conn = (PEARS_CLIENT_CONN *)calloc(1, sizeof(*pc_conn));
+	//PEARS_CLIENT_CONN *pc_conn = (PEARS_CLIENT_CONN *)calloc(1, sizeof(*pc_conn));
+	conns = (PEARS_CLIENT_COLL *)calloc(1, sizeof(*conns));
+	//conns->
+	PEARS_CLIENT_CONN *pc_conn = &(conns->clients[0]);
+
 	/* initialize key-value store */
 	pears_kv_init();
 
 	/* setup server rdma resources */
-	/*psc->ctx = init_ibv_ctx(NULL);*/
 	res = init_server_dev(psc);
 	if(res) {
 		goto clean_exit_err;
 	}
 	
-	//TODO: transform code below to do following:
-	/*	loop (until ctrl-c || target is met -> all clients disconnected):
-			poll on incoming connections and buffers
-			if(new connection)
-				setup client
-			else if(buffer from client modified)
-				read request and print contents
-			else if(client want disconnect)
-				disconnect the client and clean up for it
-		end loop
-		if(ctrl-c was hit)
-			try cleaning up all client resources
-		clean up server resources
-
-	*/
-	/* wait for single client to connect */
-	res = wait_for_client_conn(psc, pc_conn);
-	if(res) {
-		goto clean_exit_err;
-	}
-
-	/* setup resources for that client */
-	res = init_server_client_resources(pc_conn);
-	if(res) {
-		goto clean_exit_err;
-	}
-
-	//TODO: accept multiple clients
-	res = accept_client_conn(psc, pc_conn);
-	if(res) {
-		goto clean_exit_err;
-	}
-
-	res = send_md_s2c(pc_conn);
-	if(res) {
-		goto clean_exit_err;
-	}
+	server(psc, conns);
 	
-	/* destroy any leftover resources */
-	/*destroy_ibv_context(psc->ctx, psc->pd);*/
-	res = disconnect_client_conn(psc, pc_conn);
-	if(res) {
-		goto clean_exit_err;
-	}
-
+	//TODO: let this get executed again or move to server()
 	destroy_server_dev(psc);
 	pears_kv_destroy();
 	free(psc);
-	free(pc_conn);
+	free(conns);
 	printf("Cleanup complete, exiting..\n");
 	return res;
-	
-clean_exit_err:
-	destroy_server_dev(psc);
-	free(psc);
-	free(pc_conn);
-	exit(1);
 }
