@@ -88,6 +88,7 @@ typedef struct pears_client_conn{
 	struct rdma_buffer_attr		server_md_attr;
 } PEARS_CLIENT_CONN;
 
+
 #define MAX_CLIENTS (2)
 typedef struct pears_client_collection{
 	int count;
