@@ -69,7 +69,88 @@ void pears_kv_list_all(){
 	g_list_free(values);
 }
 
-void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns){
+int process_connect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+{
+	int ret = -1;
+
+	//TODO: check if can be removed:
+	/*
+	debug("client request received");
+	res = wait_for_client_conn(psc, pc_conn);
+	if(res) {
+		log_err("wait_for_client_conn() failed");
+		exit(1);
+	}*/
+
+	/* setup resources for that client */
+	ret = init_server_client_resources(pc_conn);
+	if(ret) {
+		log_err("init_server_client_resources() failed");
+		return POLL_CLIENT_CONNECT_FAILED;
+	}
+
+	ret = accept_client_conn(psc, pc_conn);
+	if(ret) {
+		log_err("accept_client_conn() failed");
+		return POLL_CLIENT_CONNECT_FAILED;
+	}
+
+	ret = send_md_s2c(pc_conn);
+	if(ret) {
+		log_err("send_md_s2c() failed");
+		return POLL_CLIENT_CONNECT_FAILED;
+	}
+	return POLL_CLIENT_CONNECT_SUCCESS;
+}
+
+int process_disconnect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+{
+	int ret = disconnect_client_conn(psc, pc_conn);
+	if(ret) {
+		log_err("disconnect_client_conn() failed");
+		return POLL_CLIENT_DISCONNECT_FAILED;
+	}
+	return POLL_CLIENT_DISCONNECT_SUCCESS;
+}
+
+int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn) 
+{
+	//TODO: first retrieve the event, if connect, handle connect
+	// 		else handle disconnect
+	struct rdma_cm_event *cm_event = NULL;
+	int ret = -1;
+	
+	debug("Grabbing single cm event\n");
+
+	ret = rdma_cm_event_rcv_any(psc->cm_ec, &cm_event);
+	if(ret) {
+		log_err("failed to retrieve cm event");
+		return ret;
+	}
+	pc_conn->cm_cid = cm_event->id;
+
+	ret = rdma_ack_cm_event(cm_event);
+	if(ret) {
+		log_err("failed to ACK cm event");
+		return -errno;
+	}
+
+	switch(cm_event->event) {
+		case RDMA_CM_EVENT_CONNECT_REQUEST:
+			ret = process_connect_req(psc, pc_conn);
+			break;
+		case RDMA_CM_EVENT_DISCONNECTED:
+			ret = process_disconnect_req(psc, pc_conn);
+			break;
+		default:
+			log_err("Unexpected event received: %s", rdma_event_str(cm_event->event));
+			ret = -1;
+	}
+	return ret;
+}
+
+void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
+{
 	struct epoll_event ev, events[MAX_EVENTS];
 	int epollfd, n_fds;
     int i, res = 0, done = 0;
@@ -91,6 +172,7 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns){
 	//TODO: self-pipe trick so we can intercept ctrl-c
 
     while(1){
+    	debug("polling now....\n");
         n_fds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 		if(n_fds == -1) {
 			log_err("epoll_wait() failed");
@@ -99,57 +181,38 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns){
 
 		for(i = 0; i < n_fds; ++i) {
 			if(events[i].data.fd == psc->cm_ec->fd) {
-				//TODO: add handler:
-				//		for RDMA_CM_EVENT_CONNECT_REQUEST
-				//		and RDMA_CM_EVENT_DISCONNECTED
 				debug("cm event channel ready\n");
 				/* take first available slot setup new connection there */
+				//TODO: cant choose entry yet
 				PEARS_CLIENT_CONN *pc_conn = &(conns->clients[conns->count]);
 
-				debug("client request received");
-				res = wait_for_client_conn(psc, pc_conn);
-				if(res) {
-					log_err("wait_for_client_conn() failed");
-					exit(1);
+				/* accept or disconnect */
+				res = process_cm_event(psc, pc_conn);
+
+				//TODO: add mechanism to manage entries
+				if(res == POLL_CLIENT_CONNECT_SUCCESS) {
+					//conns->count++;
+					debug("should increment count.. but wont\n");
+				} else if(res == POLL_CLIENT_DISCONNECT_SUCCESS) {
+					debug("should decrement count and reset entry.. but wont\n");
 				}
 
-				/* setup resources for that client */
-				res = init_server_client_resources(pc_conn);
-				if(res) {
-					log_err("init_server_client_resources() failed");
-					exit(1);
-				}
 
-				res = accept_client_conn(psc, pc_conn);
-				if(res) {
-					log_err("accept_client_conn() failed");
-					exit(1);
-				}
-
-				res = send_md_s2c(pc_conn);
-				if(res) {
-					log_err("send_md_s2c() failed");
-					exit(1);
-				}
-
-				res = disconnect_client_conn(psc, pc_conn);
-				if(res) {
-					log_err("disconnect_client_conn() failed");
-					exit(1);
-				}
-
-				destroy_server_dev(psc);
-				pears_kv_destroy();
-				free(psc);
-				free(conns);
-				printf("Cleanup complete, exiting..\n");
-				exit(0);
+				//TODO: add completion channel(?) fd to set of polled on fds
+				//		should do in process_cm_event() or make process_cm_event()
+				//		return whether it was a connect or disconnect so can do here				
 			} else {
 				//process connected clients request
 				debug("nothing done here yet");
 			}
 		}
     }
+    destroy_server_dev(psc);
+	pears_kv_destroy();
+	free(psc);
+	free(conns);
+	printf("Cleanup complete, exiting..\n");
+	exit(0);
 }
 
 /*int pears_init_server(){
@@ -184,7 +247,11 @@ int main(int argc, char **argv){
 	/* setup server rdma resources */
 	res = init_server_dev(psc);
 	if(res) {
-		goto clean_exit_err;
+		destroy_server_dev(psc);
+		pears_kv_destroy();
+		free(psc);
+		free(conns);
+		exit(1);
 	}
 	
 	server(psc, conns);

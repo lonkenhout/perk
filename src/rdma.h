@@ -136,6 +136,8 @@ struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd, void *addr, uint32_t leng
 int rdma_cm_event_rcv(struct rdma_event_channel *ec,
 					enum rdma_cm_event_type e_type,
 					struct rdma_cm_event **cme);
+int rdma_cm_event_rcv_any(struct rdma_event_channel *ec,
+					struct rdma_cm_event **cme);
 int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *wc, int max_wc);
 int validate_wcs(struct ibv_wc *wc, int tot);
 struct ibv_mr* rdma_buffer_alloc(struct ibv_pd *pd, uint32_t len, enum ibv_access_flags perm);

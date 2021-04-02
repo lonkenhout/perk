@@ -292,11 +292,11 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 
 int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
-	struct rdma_cm_event *cme = NULL;
+	//struct rdma_cm_event *cme = NULL;
 	int ret = -1;
 
 	//TODO: should be done in handler function
-	ret = rdma_cm_event_rcv(psc->cm_ec,
+	/*ret = rdma_cm_event_rcv(psc->cm_ec,
 							RDMA_CM_EVENT_DISCONNECTED,
 							&cme);
 	if(ret) {
@@ -308,9 +308,7 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	if(ret) {
 		log_err("rdma_ack_cm_event() failed");
 		return -errno;
-	}
-
-	printf("buff: %s\n", (char*)(pc_conn->server_md_attr.address));
+	}*/
 
 	rdma_destroy_qp(pc_conn->cm_cid);
 	ret = rdma_destroy_id(pc_conn->cm_cid);
@@ -777,6 +775,26 @@ int rdma_cm_event_rcv(struct rdma_event_channel *ec,
 		return 1;
 	}
 	debug("Received %s\n", rdma_event_str(e_type));
+	return 0;
+}
+
+int rdma_cm_event_rcv_any(struct rdma_event_channel *ec,
+					struct rdma_cm_event **cme)
+{
+	int ret = -1;
+	ret = rdma_get_cm_event(ec, cme);
+	if(ret) {
+		log_err("failed to retrieve cm event");
+		return -errno;
+	}
+	
+	if((*cme)->status != 0) {
+		log_err("event has non zero status: %d", (*cme)->status);
+		rdma_ack_cm_event(*cme);
+		return -((*cme)->status);
+	}
+	
+	debug("Received %s\n", rdma_event_str((*cme)->event));
 	return 0;
 }
 
