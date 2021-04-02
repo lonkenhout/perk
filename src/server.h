@@ -3,9 +3,15 @@
 
 #include <stdio.h>
 
-#include "./util.h"
 
-/* Server header */
+#include <glib.h>
+
+#include "./util.h"
+#include "./rdma.h"
+
+#define DEFAULT_IPADDR	"127.0.0.1"
+#define DEFAULT_PORT	(4944)
+
 
 
 
