@@ -5,8 +5,8 @@ Bachelor project 2021
 ## Progress
 ### Todo
 - allow server to handle multiple clients:
-	- very naively polls on event channel now, i.e. its only polling for one connection and expects a connect only --> expand to handle disconnect
-	- client buffers (fd)
+	- very naively polls on event channel now, i.e. handles connect and disconnect, but only one at a time --> add mechanism to manage multiple connections at the same time
+	- add polling on incoming client requests: completion channel fd?
 	- for now: infinitely handle requests
 - setup way to input k-v pairs: stdin(pipes/test)/file
 - setup requests
