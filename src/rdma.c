@@ -351,6 +351,26 @@ int destroy_server_dev(PEARS_SVR_CTX *psc)
 	rdma_destroy_event_channel(psc->cm_ec);
 }
 
+int client_coll_find_free(PEARS_CLIENT_COLL *conns)
+{
+	int i;
+	for(i = 0; i < MAX_CLIENTS; ++i) {
+		if(!conns->active[i]) break;
+	}
+	return i;
+}
+
+int client_coll_find_conn(PEARS_CLIENT_COLL *conns, struct sockaddr *addr)
+{
+	int i;
+	for(i = 0; i < MAX_CLIENTS; ++i) {
+		if(conns->active[i] && addr_eq(addr, (struct sockaddr *)&(conns->clients[i].client_sa))) {
+			break;
+		}
+	}
+	return i;
+}
+
 /**
  * Client functions
  *
@@ -525,7 +545,7 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 
 	pcc->kvs_request_mr = rdma_buffer_register(pcc->pd,
 											   pcc->kvs_request,
-											   strlen(pcc->kvs_request),
+											   MAX_LINE_LEN,
 											   PERM_R_RW);
 	if(!pcc->kvs_request_mr) {
 		log_err("rdma_buffer_register() failed");
@@ -566,6 +586,16 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 	}
 	show_rdma_buffer_attr(&(pcc->kvs_request_attr));
 
+	/* register region for remote read and write */
+	pcc->remote_mr = rdma_buffer_register(pcc->pd,
+										  pcc->remote,
+										  MAX_LINE_LEN,
+										  PERM_R_RW);
+	if(!pcc->remote_mr) {
+		log_err("rdma_buffer_register() failed");
+		return -ENOMEM;
+	}
+
 	debug("Server buffer location and credentials received\n");
 	return 0;
 }
@@ -576,15 +606,6 @@ int rdma_write_c2s(PEARS_CLT_CTX *pcc)
 	struct ibv_send_wr	*bad_snd_wr = NULL;
 	struct ibv_wc 		wc;
 	int 				ret = -1;
-
-	pcc->remote_mr = rdma_buffer_register(pcc->pd,
-										  pcc->remote,
-										  strlen(pcc->kvs_request),
-										  PERM_R_RW);
-	if(!pcc->remote_mr) {
-		log_err("rdma_buffer_register() failed");
-		return -ENOMEM;
-	}
 
 	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
 	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
@@ -884,17 +905,4 @@ void print_ibv_devs()
 	}
 }
 
-/* Code acknowledgment: rping.c from librdmacm/examples */
-int get_addr(char *dst, struct sockaddr *addr)
-{
-	struct addrinfo *res;
-	int ret = -1;
-	ret = getaddrinfo(dst, NULL, NULL, &res);
-	if (ret) {
-		log_err("getaddrinfo failed - invalid hostname or IP address\n");
-		return ret;
-	}
-	memcpy(addr, res->ai_addr, sizeof(struct sockaddr_in));
-	freeaddrinfo(res);
-	return ret;
-}
+

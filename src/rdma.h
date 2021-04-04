@@ -69,7 +69,7 @@ typedef struct pears_client_context{
 
 typedef struct pears_client_conn{
 	struct sockaddr_in			client_sa;
-
+	struct sockaddr				*addr;
 	struct rdma_cm_id			*cm_cid;
 
 	struct ibv_pd				*pd;
@@ -91,7 +91,7 @@ typedef struct pears_client_conn{
 
 #define MAX_CLIENTS (2)
 typedef struct pears_client_collection{
-	int count;
+	int active[MAX_CLIENTS];
 	PEARS_CLIENT_CONN clients[MAX_CLIENTS];
 } PEARS_CLIENT_COLL;
 
@@ -122,6 +122,9 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
 int destroy_server_dev(PEARS_SVR_CTX *psc);
 int send_md_s2c(PEARS_CLIENT_CONN *pc_conn);
 
+int client_coll_find_free(PEARS_CLIENT_COLL *conns);
+int client_coll_find_conn(PEARS_CLIENT_COLL *conns, struct sockaddr *addr);
+
 /* client side functions */
 int init_client_dev(PEARS_CLT_CTX *pcc, struct sockaddr_in *svr_sa);
 int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc);
@@ -150,6 +153,5 @@ void print_ibv_devs(void);
 
 /* util from other repos */
 void show_rdma_buffer_attr(struct rdma_buffer_attr *attr);
-int get_addr(char *dst, struct sockaddr *addr);
 
 #endif
