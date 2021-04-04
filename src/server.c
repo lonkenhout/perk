@@ -113,11 +113,12 @@ int process_disconnect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	return POLL_CLIENT_DISCONNECT_SUCCESS;
 }
 
-int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn) 
+int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns) 
 {
 	//TODO: first retrieve the event, if connect, handle connect
 	// 		else handle disconnect
 	struct rdma_cm_event *cm_event = NULL;
+	struct rdma_cm_id *tmp_id = NULL;
 	int ret = -1;
 	
 	debug("Grabbing single cm event\n");
@@ -127,7 +128,9 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		log_err("failed to retrieve cm event");
 		return ret;
 	}
-	pc_conn->cm_cid = cm_event->id;
+	/* grab information so we can identify the connection */
+	struct sockaddr *src = &(cm_event->id->route.addr.dst_addr); 
+	tmp_id = cm_event->id;
 
 	ret = rdma_ack_cm_event(cm_event);
 	if(ret) {
@@ -135,11 +138,28 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		return -errno;
 	}
 
+
+	
+	
+	//char addr[100] = {0,};
+	//ret = get_addr_port(addr, src);
+
+	/* determine which connection this is about*/
+	PEARS_CLIENT_CONN *pc_conn = NULL;
+	int conn_i;
+	//&(conns->clients[conns->count])
+
 	switch(cm_event->event) {
 		case RDMA_CM_EVENT_CONNECT_REQUEST:
+			conn_i = client_coll_find_free(conns);
+			pc_conn = &(conns->clients[conn_i]);
+			pc_conn->cm_cid = tmp_id;
 			ret = process_connect_req(psc, pc_conn);
+			if(POLL_CLIENT_CONNECT_SUCCESS) conns->active[conn_i] = 1;
 			break;
 		case RDMA_CM_EVENT_DISCONNECTED:
+			conn_i = client_coll_find_conn(conns, src);
+			pc_conn = &(conns->clients[conn_i]);
 			ret = process_disconnect_req(psc, pc_conn);
 			break;
 		default:
@@ -184,10 +204,10 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 				debug("cm event channel ready\n");
 				/* take first available slot setup new connection there */
 				//TODO: cant choose entry yet
-				PEARS_CLIENT_CONN *pc_conn = &(conns->clients[conns->count]);
+				
 
 				/* accept or disconnect */
-				res = process_cm_event(psc, pc_conn);
+				res = process_cm_event(psc, conns);
 
 				//TODO: add mechanism to manage entries
 				if(res == POLL_CLIENT_CONNECT_SUCCESS) {
@@ -239,7 +259,7 @@ int main(int argc, char **argv){
 	//PEARS_CLIENT_CONN *pc_conn = (PEARS_CLIENT_CONN *)calloc(1, sizeof(*pc_conn));
 	conns = (PEARS_CLIENT_COLL *)calloc(1, sizeof(*conns));
 	//conns->
-	PEARS_CLIENT_CONN *pc_conn = &(conns->clients[0]);
+	//PEARS_CLIENT_CONN *pc_conn = &(conns->clients[0]);
 
 	/* initialize key-value store */
 	pears_kv_init();
