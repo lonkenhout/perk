@@ -5,6 +5,7 @@
 #include <getopt.h>
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -14,7 +15,16 @@
 #include <rdma/rdma_cma.h>
 #include <infiniband/verbs.h>
 
-#define PEARS_DEBUG 1
+#define PEARS_DEBUG (1)
+
+#define OK (1)
+#define TOO_LONG (2)
+
+/* max expected request length and max number of requests
+ * sent 
+ */
+#define MAX_LINE_LEN (200)
+#define MAX_LINES (1)
 
 /* debugging macros */
 #define get_errno() (errno == 0 ? "None" : strerror(errno))
@@ -29,7 +39,12 @@
 #define debug(msg, ...)
 #endif
 
+int get_line(char *buff, size_t max);
+int get_file_line(FILE *input_file, char *buff, size_t max);
 
+int get_addr(char *dst, struct sockaddr *addr);
+int get_addr_port(char *res, struct sockaddr *addr);
+int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
 
 #endif
 
