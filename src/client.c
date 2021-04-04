@@ -4,6 +4,8 @@
 
 
 static PEARS_CLT_CTX *pcc = NULL;
+static FILE *f_ptr = NULL;
+static int using_file = 0;
 
 /* usage */
 void print_usage(char *cmd){
@@ -14,7 +16,7 @@ void print_usage(char *cmd){
 /* parse options */
 int parse_opts(int argc, char **argv){
 	int ret = 0, option;
-	while((option = getopt(argc, argv, "a:p:")) != -1){
+	while((option = getopt(argc, argv, "a:p:i:")) != -1){
 		switch(option){
 			case 'a':
 				ret = get_addr(optarg, (struct sockaddr*) &(pcc->client_sa));
@@ -28,6 +30,14 @@ int parse_opts(int argc, char **argv){
 				pcc->client_sa.sin_port = htons(strtol(optarg, NULL, 0));
 				debug("ip address set to %s\n", optarg);
 				break;
+			case 'i':
+				debug("opening %s\n", optarg);
+				f_ptr = fopen(optarg, "r");
+				if(!f_ptr) {
+					log_err("opening file failed, using stdin instead");
+				} else {
+					using_file = 1;
+				}
 			default:
 				print_usage(argv[0]);
 				ret = -1;
@@ -37,6 +47,28 @@ int parse_opts(int argc, char **argv){
 	return ret;
 }
 
+
+int get_input(char **dest, int lines) {
+	debug("Gathering lines to send\n");
+	int i, ret = -1, total = 0;
+	for(i = 0; i < lines; ++i) {
+		debug("Requesting input line via stdin [%d/%d]\n", i+1, lines);
+		if(using_file) {
+			ret = get_file_line(f_ptr, dest[i], MAX_LINE_LEN);
+		} else {
+			ret = get_line(dest[i], MAX_LINE_LEN);
+		}
+		if(ret == TOO_LONG) {
+			log_err("input line was too long");
+			return -1;
+		} else if(ret == EOF) {
+			log_err("EOF encountered");
+			return -1;
+		}
+		total++;
+	}
+	return total;
+}
 
 
 int main(int argc, char **argv){
@@ -55,7 +87,9 @@ int main(int argc, char **argv){
 	pcc = (PEARS_CLT_CTX *)calloc(1, sizeof(*pcc));
 	pcc->kvs_request = (char *)calloc(1, 30);
 	pcc->remote = (char *)calloc(1, 30);
-	strcpy(pcc->kvs_request,"G:randomkey:randomvalue");
+
+	// placeholder for during registration
+	strcpy(pcc->kvs_request,"placeholder");
 
 	parse_opts(argc, argv);
 
@@ -77,20 +111,31 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 
+	/* setup a string by reading it from file/stdin */
+	// apparently have to put something in buffer before
+	// registering 
+
 	ret = send_md_c2s(pcc);
 	if(ret) {
 		log_err("send_md_c2s() failed");
 		goto clean_exit;
 	}
 
-	ret = rdma_write_c2s(pcc);
-	if(ret) {
-		log_err("rdma_write_c2s() failed");
-		goto clean_exit;
+	int count = 0;
+	while(count < 10) {
+		get_input(&(pcc->kvs_request), MAX_LINES);
+		ret = rdma_write_c2s(pcc);
+		if(ret) {
+			log_err("rdma_write_c2s() failed");
+			goto clean_exit;
+		}
+		printf("Local buff:  %s\n", pcc->kvs_request);
+		printf("Remote buff: %s\n", pcc->remote);
+		count++;
 	}
+	sleep(20);
 
-	printf("Local buff:  %s\n", pcc->kvs_request);
-	printf("Remote buff: %s\n", pcc->remote);
+	
 
 	ret = client_disconnect(pcc);
 	if(ret) {
@@ -99,11 +144,19 @@ int main(int argc, char **argv){
 	}
 
 
-	
+	free(pcc);
+	if(using_file) {
+		fclose(f_ptr);
+	}
 
 	return 0;
 
 clean_exit:
+	free(pcc->kvs_request);
+	free(pcc->remote);
 	free(pcc);
+	if(using_file) {
+		fclose(f_ptr);
+	}
 	return ret;
 }
