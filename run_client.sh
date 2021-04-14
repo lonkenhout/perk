@@ -1,6 +1,6 @@
 
 #infile=/home/rdmabox/Documents/bsc-project-rdma/testin
-infile=testin
+infile=input.in
 if [ $# -eq 0 ]
 then
 	ip=127.0.0.1
