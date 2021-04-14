@@ -4,6 +4,7 @@ CMakeFiles/
 bin/
 cmake_install.cmake
 Makefile
+*.in
 
 # Prerequisites
 *.d
