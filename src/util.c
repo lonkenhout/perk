@@ -1,6 +1,60 @@
 
 #include "./util.h"
 
+
+int parse_request(char *request, 
+				char *k, size_t k_sz,
+				char *v, size_t v_sz)
+{
+	int ret = EMPTY;
+	switch(request[0]) {
+		case 'P':
+			ret = parse_put_request(request + 2, k, k_sz, v, v_sz);
+			break;
+		case 'G':
+			ret = parse_get_request(request + 2, k, k_sz);
+			break;
+		default:
+			return EMPTY;
+	}
+}
+
+int parse_put_request(char *request, 
+				char *k, size_t k_sz,
+				char *v, size_t v_sz)
+{
+	int i = 0, j = 0;
+	while(request[i] != ':' && j < k_sz) {
+		k[j++] = request[i++];
+	}
+	if(j > k_sz) return MALFORMED;
+	k[j] = '\0';
+	i++;
+
+	j = 0;
+	while(request[i] != '\0' && j < v_sz) {
+		v[j++] = request[i++];
+	}
+	if(j > v_sz) return MALFORMED;
+	v[j] = '\0';
+	return PUT;
+}
+
+int parse_get_request(char *request, 
+				char *k, size_t k_sz)
+{
+	int i = 0;
+	while(request[i] != '\0' && i < k_sz) {
+		k[i] = request[i];
+		i++;
+	}
+	if(i > k_sz) return MALFORMED;
+	k[i] = '\0';
+	return GET;
+}
+
+
+
 int get_line(char *buff, size_t max)
 {
 	int ch, extra;
@@ -49,7 +103,6 @@ int get_file_line(FILE *input_file, char *buff, size_t max)
 	}
 	/* If the message was too long, there'll be no newline. In that case we flush
 	 * to EOL so that any excess does not affect the next call. */
-	printf("char at %ld is %c, max is %ld\n", strlen(buff)-1, buff[strlen(buff)-1], max);
 	if(buff[strlen(buff)-1] != '\n') {
 		extra = 0;
 		/* Clean up any extranneous chars */
@@ -125,4 +178,18 @@ int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2)
 		}
 	}
 	return ret;
+}
+
+void get_time(struct timeval *t)
+{
+	if(gettimeofday(t, 0) != 0) {
+		log_err("gettimeofday() failed");
+		exit(1);
+	}
+}
+
+double compute_time(struct timeval start, struct timeval end, double scale)
+{
+	return ((end.tv_sec + (end.tv_usec / 1000000.0)) -
+			(start.tv_sec + (start.tv_usec / 1000000.0))) * scale;
 }

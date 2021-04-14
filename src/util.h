@@ -9,13 +9,28 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/time.h>
+#include <time.h>
 //#include <netinet/in.h>
 //#include <sys/socket.h>
 
 #include <rdma/rdma_cma.h>
 #include <infiniband/verbs.h>
 
-#define PEARS_DEBUG (1)
+enum REQUEST_TYPE {
+	GET,
+	PUT,
+	EMPTY,
+	MALFORMED
+};
+
+//#define PEARS_DEBUG (1)
+
+#define SCALE_SEC	(1.0)
+#define SCALE_MSEC	(1000.0)
+#define SCALE_MCSEC	(1000000.0)
 
 #define OK (1)
 #define TOO_LONG (2)
@@ -23,7 +38,9 @@
 /* max expected request length and max number of requests
  * sent 
  */
-#define MAX_LINE_LEN (200)
+#define MAX_KEY_SIZE (20)
+#define MAX_VAL_SIZE (180)
+#define MAX_LINE_LEN (MAX_KEY_SIZE+MAX_VAL_SIZE)
 #define MAX_LINES (1)
 
 /* debugging macros */
@@ -39,12 +56,25 @@
 #define debug(msg, ...)
 #endif
 
+int parse_get_request(char *request, 
+				char *k, size_t k_sz);
+int parse_put_request(char *request, 
+				char *k, size_t k_sz,
+				char *v, size_t v_sz);
+int parse_request(char *request, 
+				char *k, size_t k_sz,
+				char *v, size_t v_sz);
+
+
 int get_line(char *buff, size_t max);
 int get_file_line(FILE *input_file, char *buff, size_t max);
 
 int get_addr(char *dst, struct sockaddr *addr);
 int get_addr_port(char *res, struct sockaddr *addr);
 int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
+
+void get_time(struct timeval *t);
+double compute_time(struct timeval start, struct timeval end, double scale);
 
 #endif
 

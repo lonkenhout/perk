@@ -10,7 +10,7 @@ static int using_file = 0;
 /* usage */
 void print_usage(char *cmd){
 	printf("Usage:\n");
-	printf("\t%s -a [IP] -p [PORT]\n", cmd);
+	printf("\t%s -a [IP] -p [PORT] [-i [INPUT_FILE]]\n", cmd);
 }
 
 /* parse options */
@@ -38,6 +38,7 @@ int parse_opts(int argc, char **argv){
 				} else {
 					using_file = 1;
 				}
+				break;
 			default:
 				print_usage(argv[0]);
 				ret = -1;
@@ -70,7 +71,6 @@ int get_input(char **dest, int lines) {
 	return total;
 }
 
-
 int main(int argc, char **argv){
 	printf("Started client\n");
 	int ret = -1;
@@ -85,8 +85,8 @@ int main(int argc, char **argv){
 	svr_sa.sin_port = 20838;
 
 	pcc = (PEARS_CLT_CTX *)calloc(1, sizeof(*pcc));
-	pcc->kvs_request = (char *)calloc(1, 30);
-	pcc->remote = (char *)calloc(1, 30);
+	pcc->kvs_request = (char *)calloc(MAX_LINE_LEN, sizeof(char));
+	pcc->remote = (char *)calloc(MAX_LINE_LEN, sizeof(char));
 
 	// placeholder for during registration
 	strcpy(pcc->kvs_request,"placeholder");
@@ -121,28 +121,82 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 
+	/* set the CQ to nonblock */
+	set_comp_channel_non_block(pcc->comp_channel);
+	struct pollfd cq_poll;
+
+	cq_poll.fd = pcc->comp_channel->fd;
+	cq_poll.events = POLLIN;
+	cq_poll.revents = 0;
+
 	int count = 0;
-	while(count < 10) {
+	while(count < 80000) {
 		get_input(&(pcc->kvs_request), MAX_LINES);
-		ret = rdma_write_c2s(pcc);
+
+		/* post receive, we always expect a response */
+		ret = rdma_post_recv(pcc->remote_mr, pcc->qp);
+		if(ret) {
+			log_err("rdma_post_recv() failed");
+			goto clean_exit;
+		}
+
+		/* write to the server */
+		ret = rdma_write_c2s_non_block(pcc);
 		if(ret) {
 			log_err("rdma_write_c2s() failed");
 			goto clean_exit;
 		}
-		printf("Local buff:  %s\n", pcc->kvs_request);
-		printf("Remote buff: %s\n", pcc->remote);
-		count++;
-	}
-	sleep(20);
+		//debug("Sent request:  %s\n", pcc->kvs_request);
 
+		struct ibv_wc wc;
+			
+		debug("Waiting for completion \n");
+		/* block on completion channel until its received */
+		int tries = 0;
+		//int 
+		do{
+			ret = poll(&cq_poll, 1, 1);
+			if(tries > 5) {
+				//printf("buffer contents: %s\n", pcc->remote);
+				break;
+			}
+			tries++;
+		} while(ret == 0);
+		if(ret < 0) {
+			log_err("poll failed\n");
+			return -errno;
+		}
+		debug("Retrieving completion for buffer\n");
+		//printf("number of compe: %u, async: %u\n", pcc->cq->comp_events_completed,
+		//	pcc->cq->async_events_completed);
+		ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
+		if(ret != 1 && pcc->remote[0] == 0) {
+			log_err("retrieve_work_completion_events() failed");
+			exit(1);
+		}
+		//usleep(1000);
+		/* check result */
+		//debug("result of GET: %s\n", pcc->remote);
+		//printf("{%s}:%s\n", pcc->kvs_request,pcc->remote);
+		memset(pcc->remote, 0, sizeof(pcc->remote_mr->length));
+
+		/* make sure the cq is empty */
+		rdma_clear_cq(pcc->cq);
+
+		count++;
+		//sleep(3);
+	}
 	
 
+	//sleep(2);
 	ret = client_disconnect(pcc);
 	if(ret) {
+
 		log_err("disconnect failed");
 		goto clean_exit;
 	}
-
+	free(pcc->kvs_request);
+	free(pcc->remote);
 
 	free(pcc);
 	if(using_file) {

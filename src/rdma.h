@@ -86,10 +86,12 @@ typedef struct pears_client_conn{
 	struct ibv_mr				*server_buf;
 	struct ibv_mr				*server_md;
 	struct rdma_buffer_attr		server_md_attr;
+
+	struct ibv_mr				*response_mr;
 } PEARS_CLIENT_CONN;
 
 
-#define MAX_CLIENTS (2)
+#define MAX_CLIENTS (8)
 typedef struct pears_client_collection{
 	int active[MAX_CLIENTS];
 	PEARS_CLIENT_CONN clients[MAX_CLIENTS];
@@ -97,7 +99,7 @@ typedef struct pears_client_collection{
 
 
 
-#define MAX_CQ_SIZE (16)
+#define MAX_CQ_SIZE (256)
 
 #define MAX_CLIENT_BACKLOG (8)
 #define MAX_SGE (2)
@@ -131,9 +133,15 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc);
 int connect_to_server(PEARS_CLT_CTX *pcc);
 int send_md_c2s(PEARS_CLT_CTX *pcc);
 int rdma_write_c2s(PEARS_CLT_CTX *pcc);
+int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc);
 int client_disconnect(PEARS_CLT_CTX *pcc);
 
 /* shared functions */
+int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp);
+int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp);
+
+int rdma_clear_cq(struct ibv_cq *cq);
+
 struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd, void *addr, uint32_t length, enum ibv_access_flags perm);
 
 int rdma_cm_event_rcv(struct rdma_event_channel *ec,
@@ -147,6 +155,8 @@ struct ibv_mr* rdma_buffer_alloc(struct ibv_pd *pd, uint32_t len, enum ibv_acces
 struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd, void *addr, uint32_t len, enum ibv_access_flags perm);
 void rdma_buffer_free(struct ibv_mr *mr);
 void rdma_buffer_deregister(struct ibv_mr *mr);
+
+int set_comp_channel_non_block(struct ibv_comp_channel *io_cc);
 
 /* extra stuff */
 void print_ibv_devs(void);
