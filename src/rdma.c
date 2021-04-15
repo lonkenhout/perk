@@ -245,8 +245,6 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return ret;
 	}
 
-	//show_rdma_buffer_attr(&(pc_conn->md_attr));
-
 	/* receive information about buffer */
 	printf("New buffer of length %u bytes requested\n", pc_conn->md_attr.length);
 	pc_conn->server_buf = rdma_buffer_alloc(pc_conn->pd,
@@ -269,8 +267,6 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
 	}
-
-	//show_rdma_buffer_attr(&(pc_conn->server_md_attr));
 
 	pc_conn->snd_sge.addr = (uint64_t) &(pc_conn->server_md_attr);
 	pc_conn->snd_sge.length = sizeof(pc_conn->server_md_attr);
@@ -300,21 +296,6 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
 	//struct rdma_cm_event *cme = NULL;
 	int ret = -1;
-
-	//TODO: should be done in handler function
-	/*ret = rdma_cm_event_rcv(psc->cm_ec,
-							RDMA_CM_EVENT_DISCONNECTED,
-							&cme);
-	if(ret) {
-		log_err("rdma_cm_event_rcv() for disconnect failed");
-		return ret;
-	}
-
-	ret = rdma_ack_cm_event(cme);
-	if(ret) {
-		log_err("rdma_ack_cm_event() failed");
-		return -errno;
-	}*/
 
 	rdma_destroy_qp(pc_conn->cm_cid);
 	ret = rdma_destroy_id(pc_conn->cm_cid);
@@ -593,14 +574,13 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 		log_err("retrieve_work_completion_events() for 2 wc failed");
 		return ret;
 	}
-	//show_rdma_buffer_attr(&(pcc->kvs_request_attr));
 
 	/* register region for remote read and write */
-	pcc->remote_mr = rdma_buffer_register(pcc->pd,
-										  pcc->remote,
+	pcc->response_mr = rdma_buffer_register(pcc->pd,
+										  pcc->response,
 										  MAX_LINE_LEN,
 										  PERM_R_RW);
-	if(!pcc->remote_mr) {
+	if(!pcc->response_mr) {
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
 	}
@@ -641,32 +621,6 @@ int rdma_write_c2s(PEARS_CLT_CTX *pcc)
 		return ret;
 	}
 	debug("Buffer written to server\n");
-
-	/*pcc->snd_sge.addr = (uint64_t) pcc->remote_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->remote_mr->length;
-	pcc->snd_sge.lkey = pcc->remote_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_READ;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	// read from remote address
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("failed to read from remote address");
-		return -errno;
-	}
-
-	ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
-	if(ret != 1) {
-		log_err("failed to retrieve work completion");
-		return ret;
-	}
-	debug("Completed reading remote address\n");
-	show_rdma_buffer_attr(&(pcc->server_md_attr));*/
 	return 0;
 }
 
@@ -717,31 +671,6 @@ int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc)
 	return 0;
 }
 
-/*int rdma_prepare_write() 
-{
-	struct ibv_send_wr 	snd_wr;
-	struct ibv_send_wr	*bad_snd_wr = NULL;
-	struct ibv_wc 		wc;
-	int 				ret = -1;
-
-	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
-	pcc->snd_sge.lkey = pcc->kvs_request_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_WRITE;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("ibv_post_send() failed");
-		return -errno;
-	}
-}*/
-
 int rdma_send_c2s(PEARS_CLT_CTX *pcc)
 {
 	struct ibv_send_wr 	snd_wr;
@@ -773,9 +702,9 @@ int rdma_send_c2s(PEARS_CLT_CTX *pcc)
 	}
 	debug("Buffer written to server\n");
 
-	pcc->snd_sge.addr = (uint64_t) pcc->remote_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->remote_mr->length;
-	pcc->snd_sge.lkey = pcc->remote_mr->lkey;
+	pcc->snd_sge.addr = (uint64_t) pcc->response_mr->addr;
+	pcc->snd_sge.length = (uint32_t) pcc->response_mr->length;
+	pcc->snd_sge.lkey = pcc->response_mr->lkey;
 	bzero(&snd_wr, sizeof(snd_wr));
 	snd_wr.sg_list = &(pcc->snd_sge);
 	snd_wr.num_sge = 1;
@@ -840,7 +769,7 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
 	rdma_buffer_deregister(pcc->server_md_mr);
 	rdma_buffer_deregister(pcc->kvs_request_attr_mr);
 	rdma_buffer_deregister(pcc->kvs_request_mr);
-	rdma_buffer_deregister(pcc->remote_mr);
+	rdma_buffer_deregister(pcc->response_mr);
 
 	ret = ibv_dealloc_pd(pcc->pd);
 	if(ret) {
@@ -915,16 +844,13 @@ int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *
 	void *ctx = NULL;
 	int ret = -1, total_wc = 0;
 
-	//printf("Getting event\n");
 	/* ack cq events regardless of status, important for cleanup later*/
 	ret = ibv_get_cq_event(cc, &cq_p, &ctx);
 	if(ret) {
-		//log_err("ibv_get_cq_event() failed");
 		if(cq_p) ibv_ack_cq_events(cq_p, 1);
 		return -errno;
 	}
 	ibv_ack_cq_events(cq_p, 1);
-	//printf("Got event\n");
 
 	ret = ibv_req_notify_cq(cq_p, 0);
 	if(ret) {
@@ -932,7 +858,6 @@ int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *
 		return -errno;
 	}
 
-	//printf("Polling\n");
 	do {
 		ret = ibv_poll_cq(cq_p, max_wc-total_wc, wc + total_wc);
 		if(ret < 0) {

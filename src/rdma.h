@@ -59,8 +59,8 @@ typedef struct pears_client_context{
 	struct rdma_buffer_attr		server_md_attr;
 	struct ibv_mr				*server_md_mr;
 
-	char						*remote;
-	struct ibv_mr				*remote_mr;
+	char						*response;
+	struct ibv_mr				*response_mr;
 
 	/* request util */
 	struct ibv_sge				rec_sge;

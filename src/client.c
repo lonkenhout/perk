@@ -71,6 +71,69 @@ int get_input(char **dest, int lines) {
 	return total;
 }
 
+int client(PEARS_CLT_CTX *pcc)
+{
+	int ret = -1;
+	/* set the CQ to nonblock */
+	set_comp_channel_non_block(pcc->comp_channel);
+	struct pollfd cq_poll;
+
+	cq_poll.fd = pcc->comp_channel->fd;
+	cq_poll.events = POLLIN;
+	cq_poll.revents = 0;
+
+	int count = 0;
+	while(count < 80000) {
+		get_input(&(pcc->kvs_request), MAX_LINES);
+
+		/* post receive, we always expect a response */
+		ret = rdma_post_recv(pcc->response_mr, pcc->qp);
+		if(ret) {
+			log_err("rdma_post_recv() failed");
+			return 1;
+		}
+
+		/* write to the server */
+		ret = rdma_write_c2s_non_block(pcc);
+		if(ret) {
+			log_err("rdma_write_c2s() failed");
+			return 1;
+		}
+
+		struct ibv_wc wc;
+			
+		debug("Waiting for completion \n");
+		/* block on completion channel until its received */
+		int tries = 0;
+		do{
+			ret = poll(&cq_poll, 1, 1);
+			if(tries > 5) {
+				/* try 5 times to check whether the cq triggered an event */
+				break;
+			}
+			tries++;
+		} while(ret == 0);
+		if(ret < 0) {
+			log_err("poll failed\n");
+			return -errno;
+		}
+		debug("Retrieving completion for buffer\n");
+		ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
+		if(ret != 1 && pcc->response[0] == 0) {
+			log_err("retrieve_work_completion_events() failed");
+			exit(1);
+		}
+
+		memset(pcc->response, 0, sizeof(pcc->response_mr->length));
+
+		/* make sure the cq is empty */
+		rdma_clear_cq(pcc->cq);
+
+		count++;
+	}
+	return 0;
+}
+
 int main(int argc, char **argv){
 	printf("Started client\n");
 	int ret = -1;
@@ -86,9 +149,8 @@ int main(int argc, char **argv){
 
 	pcc = (PEARS_CLT_CTX *)calloc(1, sizeof(*pcc));
 	pcc->kvs_request = (char *)calloc(MAX_LINE_LEN, sizeof(char));
-	pcc->remote = (char *)calloc(MAX_LINE_LEN, sizeof(char));
+	pcc->response = (char *)calloc(MAX_LINE_LEN, sizeof(char));
 
-	// placeholder for during registration
 	strcpy(pcc->kvs_request,"placeholder");
 
 	parse_opts(argc, argv);
@@ -111,80 +173,16 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 
-	/* setup a string by reading it from file/stdin */
-	// apparently have to put something in buffer before
-	// registering 
-
 	ret = send_md_c2s(pcc);
 	if(ret) {
 		log_err("send_md_c2s() failed");
 		goto clean_exit;
 	}
 
-	/* set the CQ to nonblock */
-	set_comp_channel_non_block(pcc->comp_channel);
-	struct pollfd cq_poll;
-
-	cq_poll.fd = pcc->comp_channel->fd;
-	cq_poll.events = POLLIN;
-	cq_poll.revents = 0;
-
-	int count = 0;
-	while(count < 80000) {
-		get_input(&(pcc->kvs_request), MAX_LINES);
-
-		/* post receive, we always expect a response */
-		ret = rdma_post_recv(pcc->remote_mr, pcc->qp);
-		if(ret) {
-			log_err("rdma_post_recv() failed");
-			goto clean_exit;
-		}
-
-		/* write to the server */
-		ret = rdma_write_c2s_non_block(pcc);
-		if(ret) {
-			log_err("rdma_write_c2s() failed");
-			goto clean_exit;
-		}
-		//debug("Sent request:  %s\n", pcc->kvs_request);
-
-		struct ibv_wc wc;
-			
-		debug("Waiting for completion \n");
-		/* block on completion channel until its received */
-		int tries = 0;
-		//int 
-		do{
-			ret = poll(&cq_poll, 1, 1);
-			if(tries > 5) {
-				//printf("buffer contents: %s\n", pcc->remote);
-				break;
-			}
-			tries++;
-		} while(ret == 0);
-		if(ret < 0) {
-			log_err("poll failed\n");
-			return -errno;
-		}
-		debug("Retrieving completion for buffer\n");
-		//printf("number of compe: %u, async: %u\n", pcc->cq->comp_events_completed,
-		//	pcc->cq->async_events_completed);
-		ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
-		if(ret != 1 && pcc->remote[0] == 0) {
-			log_err("retrieve_work_completion_events() failed");
-			exit(1);
-		}
-		//usleep(1000);
-		/* check result */
-		//debug("result of GET: %s\n", pcc->remote);
-		//printf("{%s}:%s\n", pcc->kvs_request,pcc->remote);
-		memset(pcc->remote, 0, sizeof(pcc->remote_mr->length));
-
-		/* make sure the cq is empty */
-		rdma_clear_cq(pcc->cq);
-
-		count++;
-		//sleep(3);
+	ret = client(pcc);
+	if(ret) {
+		log_err("client() failed");
+		goto clean_exit;
 	}
 	
 
@@ -196,7 +194,7 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 	free(pcc->kvs_request);
-	free(pcc->remote);
+	free(pcc->response);
 
 	free(pcc);
 	if(using_file) {
@@ -207,7 +205,7 @@ int main(int argc, char **argv){
 
 clean_exit:
 	free(pcc->kvs_request);
-	free(pcc->remote);
+	free(pcc->response);
 	free(pcc);
 	if(using_file) {
 		fclose(f_ptr);
