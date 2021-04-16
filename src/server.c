@@ -84,15 +84,6 @@ int process_connect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
 	int ret = -1;
 
-	//TODO: check if can be removed:
-	/*
-	debug("client request received");
-	res = wait_for_client_conn(psc, pc_conn);
-	if(res) {
-		log_err("wait_for_client_conn() failed");
-		exit(1);
-	}*/
-
 	/* setup resources for that client */
 	ret = init_server_client_resources(pc_conn);
 	if(ret) {
@@ -103,6 +94,24 @@ int process_connect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	ret = accept_client_conn(psc, pc_conn);
 	if(ret) {
 		log_err("accept_client_conn() failed");
+		return POLL_CLIENT_CONNECT_FAILED;
+	}
+
+	/*ret = send_md_s2c(pc_conn);
+	if(ret) {
+		log_err("send_md_s2c() failed");
+		return POLL_CLIENT_CONNECT_FAILED;
+	}*/
+	return POLL_CLIENT_CONNECT_SUCCESS;
+}
+
+/* finalize the request */
+int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+{
+	int ret = -1;
+	ret = finalize_client_conn(pc_conn);
+	if(ret) {
+		log_err("send_md_s2c() failed");
 		return POLL_CLIENT_CONNECT_FAILED;
 	}
 
@@ -126,11 +135,11 @@ int process_disconnect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 
 int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns) 
 {
-	//TODO: first retrieve the event, if connect, handle connect
-	// 		else handle disconnect
+	/* retrieve some event on the connection management channel */
 	struct rdma_cm_event *cm_event = NULL;
 	struct rdma_cm_id *tmp_id = NULL;
 	int ret = -1;
+	char buff[100] = {0,};
 	
 	debug("Grabbing single cm event\n");
 
@@ -140,7 +149,8 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 		return ret;
 	}
 	/* grab information so we can identify the connection */
-	struct sockaddr *src = &(cm_event->id->route.addr.dst_addr); 
+	struct sockaddr *src = &(cm_event->id->route.addr.dst_addr);
+	get_addr_port(buff, src);
 	tmp_id = cm_event->id;
 
 	ret = rdma_ack_cm_event(cm_event);
@@ -149,30 +159,38 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 		return -errno;
 	}
 
-
-	
-	
-	//char addr[100] = {0,};
-	//ret = get_addr_port(addr, src);
-
-	/* determine which connection this is about*/
 	PEARS_CLIENT_CONN *pc_conn = NULL;
 	int conn_i;
-	//&(conns->clients[conns->count])
 
 	switch(cm_event->event) {
 		case RDMA_CM_EVENT_CONNECT_REQUEST:
+			/* setup basic client resources */
+			/* first find a free entry for the client to use */
 			conn_i = client_coll_find_free(conns);
 			pc_conn = &(conns->clients[conn_i]);
 			pc_conn->cm_cid = tmp_id;
 			ret = process_connect_req(psc, pc_conn);
+			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
+				printf("added client to entry: %d\n", conn_i);
+				ret = conn_i;
+			} else {
+				ret = -2;
+			}
+			//set_comp_channel_non_block(pc_conn->io_cc);
+			break;
+		case RDMA_CM_EVENT_ESTABLISHED:
+			/* find the entry setup at */
+			//get_addr_port(buff, &(conns->clients[0].cm_cid->route.addr.dst_addr));
+			conn_i = client_coll_find_conn(conns, src);
+			pc_conn = &(conns->clients[conn_i]);
+			/* finalize the connection */
+			ret = process_established_req(psc, pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
 				conns->active[conn_i] = 1;
 				ret = conn_i;
 			} else {
 				ret = -2;
 			}
-			//set_comp_channel_non_block(pc_conn->io_cc);
 			break;
 		case RDMA_CM_EVENT_DISCONNECTED:
 			conn_i = client_coll_find_conn(conns, src);

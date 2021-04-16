@@ -120,6 +120,7 @@ int init_server_dev(PEARS_SVR_CTX *psc);
 int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
 int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn);
 int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
+int finalize_client_conn(PEARS_CLIENT_CONN *pc_conn);
 int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
 int destroy_server_dev(PEARS_SVR_CTX *psc);
 int send_md_s2c(PEARS_CLIENT_CONN *pc_conn);

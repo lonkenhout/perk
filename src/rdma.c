@@ -168,9 +168,7 @@ int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
 	struct rdma_conn_param 	conn_par;
-	struct rdma_cm_event 	*cm_event = NULL;
 	struct ibv_recv_wr		recv_wr, *bad_recv_wr = NULL;
-	struct sockaddr_in		remote_sa;
 	int						ret = 0;
 
 	if(!pc_conn->cm_cid || !pc_conn->qp) {
@@ -204,25 +202,18 @@ int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	memset(&conn_par, 0, sizeof(conn_par));
 	conn_par.initiator_depth = 3;
 	conn_par.responder_resources = 3;
+
 	ret = rdma_accept(pc_conn->cm_cid, &conn_par);
 	if(ret) {
 		log_err("rdma_accept() failed");
 		return -errno;
 	}
 	debug("accepted connection\n");
+	return 0;
+}
 
-	ret = rdma_cm_event_rcv(psc->cm_ec, RDMA_CM_EVENT_ESTABLISHED, &cm_event);
-	if(ret) {
-		log_err("failed to retrieve cm event");
-		return ret;
-	}
-
-	ret = rdma_ack_cm_event(cm_event);
-	if(ret) {
-		log_err("failed to ACK cm event");
-		return -errno;
-	}
-
+int finalize_client_conn(PEARS_CLIENT_CONN *pc_conn)
+{	
 	memcpy(&(pc_conn->client_sa),
 			rdma_get_peer_addr(pc_conn->cm_cid),
 			sizeof(struct sockaddr_in));
@@ -352,7 +343,7 @@ int client_coll_find_conn(PEARS_CLIENT_COLL *conns, struct sockaddr *addr)
 {
 	int i;
 	for(i = 0; i < MAX_CLIENTS; ++i) {
-		if(conns->active[i] && addr_eq(addr, (struct sockaddr *)&(conns->clients[i].client_sa))) {
+		if(addr_eq(addr, (struct sockaddr *)&(conns->clients[i].cm_cid->route.addr.dst_addr))) {
 			break;
 		}
 	}

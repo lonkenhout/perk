@@ -25,7 +25,6 @@ typedef struct kv_cache {
 #define DEFAULT_IPADDR	"127.0.0.1"
 #define DEFAULT_PORT	(4944)
 
-
 #define MAX_EVENTS (20)
 #define POLL_TIMEOUT (0)
 
