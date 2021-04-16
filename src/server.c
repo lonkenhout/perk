@@ -70,8 +70,9 @@ void pears_kv_list_all()
 {
 	GList *keys = g_hash_table_get_keys(ght);
 	GList *values = g_hash_table_get_values(ght);
+	GList *it1, *it2;
 	int i = 0;
-	for(GList *it1 = keys, *it2 = values; it1 != NULL; it1 = it1->next, it2 = it2->next, i++){
+	for(it1 = keys, it2 = values; it1 != NULL; it1 = it1->next, it2 = it2->next, i++){
 		printf("%s : %s\n", (char*)it1->data, (char*)it2->data);
 	}
 	printf("Total count: %d\n", i);	

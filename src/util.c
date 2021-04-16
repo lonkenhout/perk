@@ -57,8 +57,7 @@ int parse_get_request(char *request,
 
 int get_line(char *buff, size_t max)
 {
-	int ch, extra;
-
+	int ch, extra, i;
 	if(read(STDIN_FILENO, buff, max) == 0) return EOF;
 
 	/* If the message was too long, there'll be no newline. In that case we flush
@@ -73,7 +72,7 @@ int get_line(char *buff, size_t max)
 
 	/* Check for ansi escape characters and remove trailing chars by spaces */
 	int ansi_flag = 0;
-	for(int i = 0; i < (int)strlen(buff); i++) {
+	for(i = 0; i < (int)strlen(buff); i++) {
 		if(buff[i] == '\33') {
 			buff[i] = ' '; i++;
 			while(buff[i] != ' ' && buff[i] != '\33' && buff[i] != '\0' && buff[i] != '\t' && i < (int)strlen(buff)) {
@@ -96,6 +95,7 @@ int get_file_line(FILE *input_file, char *buff, size_t max)
 {
 	int ch, extra;
 	char *ret = NULL;
+	int i;
 	//if(read(*input_file, buff, max) == 0) return EOF;
 	ret = fgets(buff, max, input_file);
 	if(ret == NULL) {
@@ -113,7 +113,7 @@ int get_file_line(FILE *input_file, char *buff, size_t max)
 
 	/* Check for ansi escape characters and remove trailing chars by spaces */
 	int ansi_flag = 0;
-	for(int i = 0; i < (int)strlen(buff); i++) {
+	for(i = 0; i < (int)strlen(buff); i++) {
 		if(buff[i] == '\33') {
 			buff[i] = ' '; i++;
 			while(buff[i] != ' ' && buff[i] != '\33' && buff[i] != '\0' && buff[i] != '\t' && i < (int)strlen(buff)) {

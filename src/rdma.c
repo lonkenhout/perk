@@ -4,17 +4,17 @@
 struct ibv_context *init_ibv_dev(char *dev_name)
 {
 	struct ibv_context *ctx = NULL;
-	int n_dev = 0;
+	int n_dev = 0, i;
 	struct ibv_device** ibv_devs = ibv_get_device_list(&n_dev);
 	if(dev_name != NULL) {
-		for(int i = 0; i < n_dev; ++i) {
+		for(i = 0; i < n_dev; ++i) {
 			if(strncmp(ibv_devs[i]->dev_name, dev_name, IBV_SYSFS_NAME_MAX-1)) {
 				ctx = ibv_open_device(ibv_devs[i]);
 				break;
 			}
 		}
 	} else{
-		for(int i = 0; i < n_dev; ++i) {
+		for(i = 0; i < n_dev; ++i) {
 			ctx = ibv_open_device(ibv_devs[i]);
 			if(ctx != NULL) break;
 		}
@@ -1045,10 +1045,10 @@ void show_rdma_buffer_attr(struct rdma_buffer_attr *attr){
 
 void print_ibv_devs()
 {
-	int n_dev;
+	int n_dev, i;
 	struct ibv_device** ibv_devs = ibv_get_device_list(&n_dev);
-
-	for(int i = 0; i < n_dev; ++i) {
+	
+	for(i = 0; i < n_dev; ++i) {
 		printf("[IBV_DEV] KIB dev: %s, Uverbs dev: %s, dev path=%s, class dev: %s\n", 
 						ibv_devs[i]->name, 
 						ibv_devs[i]->dev_name,
