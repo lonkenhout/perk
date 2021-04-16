@@ -153,17 +153,17 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	get_addr_port(buff, src);
 	tmp_id = cm_event->id;
 
-	ret = rdma_ack_cm_event(cm_event);
-	if(ret) {
-		log_err("failed to ACK cm event");
-		return -errno;
-	}
 
 	PEARS_CLIENT_CONN *pc_conn = NULL;
 	int conn_i;
 
 	switch(cm_event->event) {
 		case RDMA_CM_EVENT_CONNECT_REQUEST:
+			ret = rdma_ack_cm_event(cm_event);
+			if(ret) {
+				log_err("failed to ACK cm event");
+				return -errno;
+			}
 			/* setup basic client resources */
 			/* first find a free entry for the client to use */
 			conn_i = client_coll_find_free(conns);
@@ -171,6 +171,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			pc_conn->cm_cid = tmp_id;
 			ret = process_connect_req(psc, pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
+				conns->active[conn_i] = 1;
 				printf("added client to entry: %d\n", conn_i);
 				ret = conn_i;
 			} else {
@@ -179,24 +180,36 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			//set_comp_channel_non_block(pc_conn->io_cc);
 			break;
 		case RDMA_CM_EVENT_ESTABLISHED:
+			ret = rdma_ack_cm_event(cm_event);
+			if(ret) {
+				log_err("failed to ACK cm event");
+				return -errno;
+			}
 			/* find the entry setup at */
 			//get_addr_port(buff, &(conns->clients[0].cm_cid->route.addr.dst_addr));
 			conn_i = client_coll_find_conn(conns, src);
+			printf("finalizing connection at entry %d\n", conn_i);
 			pc_conn = &(conns->clients[conn_i]);
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
-				conns->active[conn_i] = 1;
+				conns->established[conn_i] = 1;
 				ret = conn_i;
 			} else {
 				ret = -2;
 			}
 			break;
 		case RDMA_CM_EVENT_DISCONNECTED:
+			ret = rdma_ack_cm_event(cm_event);
+			if(ret) {
+				log_err("failed to ACK cm event");
+				return -errno;
+			}
 			conn_i = client_coll_find_conn(conns, src);
 			pc_conn = &(conns->clients[conn_i]);
 			ret = process_disconnect_req(psc, pc_conn);
 			conns->active[conn_i] = 0;
+			conns->established[conn_i] = 0;
 			if(ret == POLL_CLIENT_DISCONNECT_SUCCESS) {
 				ret = -1;
 			} else {
@@ -205,7 +218,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			break;
 		default:
 			log_err("Unexpected event received: %s", rdma_event_str(cm_event->event));
-			ret = -1;
+			ret = 0;
 	}
 	return ret;
 }
@@ -292,7 +305,7 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 		}
 
 		for(i = 0; i < MAX_CLIENTS; ++i) {
-			if(conns->active[i]) {
+			if(conns->established[i]) {
 				PEARS_CLIENT_CONN *pcc = &(conns->clients[i]);
 				char *buf = (char*)pcc->server_buf->addr;
 				res = parse_request(buf, 

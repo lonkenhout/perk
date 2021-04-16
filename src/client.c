@@ -83,7 +83,7 @@ int client(PEARS_CLT_CTX *pcc)
 	cq_poll.revents = 0;
 
 	int count = 0;
-	while(count < 80000) {
+	while(count < 90000) {
 		get_input(&(pcc->kvs_request), MAX_LINES);
 
 		/* post receive, we always expect a response */

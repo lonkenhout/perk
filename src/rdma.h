@@ -94,6 +94,7 @@ typedef struct pears_client_conn{
 #define MAX_CLIENTS (8)
 typedef struct pears_client_collection{
 	int active[MAX_CLIENTS];
+	int established[MAX_CLIENTS];
 	PEARS_CLIENT_CONN clients[MAX_CLIENTS];
 } PEARS_CLIENT_COLL;
 
