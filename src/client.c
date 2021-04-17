@@ -83,7 +83,7 @@ int client(PEARS_CLT_CTX *pcc)
 	cq_poll.revents = 0;
 
 	int count = 0;
-	while(count < 90000) {
+	while(count < 450000) {
 		get_input(&(pcc->kvs_request), MAX_LINES);
 
 		/* post receive, we always expect a response */
@@ -104,11 +104,11 @@ int client(PEARS_CLT_CTX *pcc)
 			
 		debug("Waiting for completion \n");
 		/* block on completion channel until its received */
-		int tries = 0;
+		/*int tries = 0;
 		do{
 			ret = poll(&cq_poll, 1, 1);
 			if(tries > 5) {
-				/* try 5 times to check whether the cq triggered an event */
+				//try 5 times to check whether the cq triggered an event
 				break;
 			}
 			tries++;
@@ -122,12 +122,19 @@ int client(PEARS_CLT_CTX *pcc)
 		if(ret != 1 && pcc->response[0] == 0) {
 			log_err("retrieve_work_completion_events() failed");
 			exit(1);
+		}*/
+		//ret = rdma_poll_cq(pcc->cq, &wc, 1, 1000);
+		ret = rdma_spin_cq(pcc->cq, &wc, 1);
+		if(ret != 1) {
+			log_err("rdma_poll_cq() failed");
+			exit(1);
 		}
+		//printf("%s:%s\n", pcc->kvs_request, pcc->response);
 
 		memset(pcc->response, 0, sizeof(pcc->response_mr->length));
 
 		/* make sure the cq is empty */
-		rdma_clear_cq(pcc->cq);
+		//rdma_clear_cq(pcc->cq);
 
 		count++;
 	}
