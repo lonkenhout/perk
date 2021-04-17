@@ -864,6 +864,56 @@ int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *
 	return total_wc;
 }
 
+/* poll on cq directly */
+int rdma_poll_cq(struct ibv_cq *cq,
+				struct ibv_wc *wc, 
+				int max_wc, 
+				useconds_t timeout)
+{
+	int ret = -1, total_wc = 0;
+
+	do {
+		/* check for work completions */
+		ret = ibv_poll_cq(cq, max_wc - total_wc, wc + total_wc);
+		if(ret < 0) {
+			log_err("ibv_poll_cq() failed");
+			return -ret;
+		}
+		total_wc += ret;
+
+		if(total_wc < max_wc && timeout > 0) {
+			usleep(timeout);
+		}
+	} while(total_wc < max_wc);
+
+	ret = validate_wcs(wc, total_wc);
+	if(ret) return ret;
+
+	return total_wc;
+}
+
+int rdma_spin_cq(struct ibv_cq *cq,
+				struct ibv_wc *wc, 
+				int max_wc)
+{
+	int ret = -1, total_wc = 0;
+
+	do {
+		/* check for work completions */
+		ret = ibv_poll_cq(cq, max_wc - total_wc, wc + total_wc);
+		if(ret < 0) {
+			log_err("ibv_poll_cq() failed");
+			return -ret;
+		}
+		total_wc += ret;
+	} while(total_wc < max_wc);
+
+	ret = validate_wcs(wc, total_wc);
+	if(ret) return ret;
+
+	return total_wc;
+}
+
 int rdma_clear_cq(struct ibv_cq *cq) 
 {
 	int ret = -1;
