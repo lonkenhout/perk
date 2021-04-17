@@ -23,11 +23,12 @@ def request_gen(req_amt=1000, distr=0.95):
     random.shuffle(res)
     return res
 
-res = request_gen(100000)
+if __name__ == '__main__':
+    res = request_gen(500000)
 
-f = open("input.in", "w")
-if f:
-    for r in res:
-        f.write(f'{r}\n')
+    f = open("input.in", "w")
+    if f:
+        for r in res:
+            f.write(f'{r}\n')
 
-f.close()
+    f.close()
