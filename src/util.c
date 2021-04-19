@@ -193,3 +193,13 @@ double compute_time(struct timeval start, struct timeval end, double scale)
 	return ((end.tv_sec + (end.tv_usec / 1000000.0)) -
 			(start.tv_sec + (start.tv_usec / 1000000.0))) * scale;
 }
+
+void print_curr_time(void)
+{
+	struct timeval t;
+	if(gettimeofday(&t, 0) != 0) {
+		log_err("gettimeofday failed");
+		return;
+	}
+	debug("tv_sec[%ld] tv_usec [%ld]\n", t.tv_sec, t.tv_usec);
+}

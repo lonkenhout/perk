@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/epoll.h>
 #include <sys/time.h>
 #include <time.h>
 //#include <netinet/in.h>
@@ -75,7 +76,7 @@ int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
 
 void get_time(struct timeval *t);
 double compute_time(struct timeval start, struct timeval end, double scale);
-
+void print_curr_time(void);
 #endif
 
 
