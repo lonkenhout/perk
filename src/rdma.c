@@ -143,7 +143,7 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 	return 0;
 }
 
-int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+/*int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
 	struct rdma_cm_event *cm_event = NULL;
 	int ret = -1;
@@ -163,7 +163,7 @@ int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	}
 	debug("RDMA client connected\n");
 	return 0;
-}
+}*/
 
 int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
@@ -192,6 +192,8 @@ int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	bzero(&recv_wr, sizeof(recv_wr));
 	recv_wr.sg_list = &(pc_conn->rec_sge);
 	recv_wr.num_sge = 1;
+	debug("posting recv\n");
+	print_curr_time();
 	ret = ibv_post_recv(pc_conn->qp, &recv_wr, &bad_recv_wr);
 	if(ret) {
 		log_err("bad work request");
@@ -230,9 +232,11 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	struct ibv_wc 			wc;
 	int 					ret = -1;
 
-	ret = retrieve_work_completion_events(pc_conn->io_cc, &wc, 1);
+	debug("Rdma polling for recv completion\n");
+	print_curr_time();
+	ret = rdma_poll_cq(pc_conn->cq, &wc, 1, 100);
 	if(ret != 1) {
-		log_err("process_work_completion_events() failed");
+		log_err("rdma_poll_cq() failed");
 		return ret;
 	}
 
@@ -268,17 +272,21 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	send_wr.num_sge = 1;
 	send_wr.opcode = IBV_WR_SEND;
 	send_wr.send_flags = IBV_SEND_SIGNALED;
+	debug("posting send\n");
+	print_curr_time();
 	ret = ibv_post_send(pc_conn->qp, &send_wr, &bad_send_wr);
 	if(ret) {
 		log_err("ibv_post_send() failed");
 		return -errno;
 	}
 
-	ret = retrieve_work_completion_events(pc_conn->io_cc, &wc, 1);
+	print_curr_time();
+	ret = rdma_poll_cq(pc_conn->cq, &wc, 1, 100);
 	if(ret != 1) {
-		log_err("retrieve_work_completion_events() failed");
+		log_err("process_work_completion_events() failed");
 		return ret;
 	}
+
 	debug("local buffer md sent to client\n");
 	return 0;
 }
@@ -473,6 +481,8 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
 	bzero(&(rec_wr), sizeof(rec_wr));
 	rec_wr.sg_list = &(pcc->rec_sge);
 	rec_wr.num_sge = 1;
+	debug("pre posting recv\n");
+	print_curr_time();
 	ret = ibv_post_recv(pcc->qp, &rec_wr, &bad_rec_wr);
 	if(ret) {
 		log_err("ibv_post_recv() failed");
@@ -553,6 +563,7 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 	snd_wr.send_flags = IBV_SEND_SIGNALED;
 
 	debug("Posting send\n");
+	print_curr_time();
 	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
 	if(ret) {
 		log_err("ibv_post_send() failed");
@@ -560,9 +571,10 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 	}
 
 	debug("Waiting for completion of recv and send\n");
-	ret = retrieve_work_completion_events(pcc->comp_channel, wc, 2);
+
+	ret = rdma_poll_cq(pcc->cq, wc, 2, 100);
 	if(ret != 2) {
-		log_err("retrieve_work_completion_events() for 2 wc failed");
+		log_err("rdma_poll_cq() failed");
 		return ret;
 	}
 
@@ -581,7 +593,7 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 }
 
 
-
+//TODO: generalize, rename
 int rdma_write_c2s(PEARS_CLT_CTX *pcc)
 {
 	struct ibv_send_wr 	snd_wr;
@@ -606,15 +618,16 @@ int rdma_write_c2s(PEARS_CLT_CTX *pcc)
 		return -errno;
 	}
 
-	ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
+	ret = rdma_poll_cq(pcc->cq, &wc, 1, 100);
 	if(ret != 1) {
-		log_err("retrieve_work_completion_events() failed");
+		log_err("rdma_spin_cq() failed");
 		return ret;
 	}
 	debug("Buffer written to server\n");
 	return 0;
 }
 
+//TODO: generalize function to WRITE with MR and not struct
 int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc)
 {
 	struct ibv_send_wr 	snd_wr;
@@ -639,85 +652,12 @@ int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc)
 		return -errno;
 	}
 
-	/* poll for the completion event */
-	struct pollfd cq_poll;
-
-	cq_poll.fd = pcc->comp_channel->fd;
-	cq_poll.events = POLLIN;
-	cq_poll.revents = 0;
-
-	do{
-		ret = poll(&cq_poll, 1, 1);
-	} while(ret == 0);
-	if(ret < 0) {
-		log_err("poll failed\n");
-		return -errno;
-	}
-	ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
+	ret = rdma_spin_cq(pcc->cq, &wc, 1);
 	if(ret != 1) {
-		log_err("retrieve_work_completion_events() failed");
+		log_err("rdma_spin_cq() failed");
 		return ret;
 	}
 	debug("Buffer written to server\n");
-	return 0;
-}
-
-int rdma_send_c2s(PEARS_CLT_CTX *pcc)
-{
-	struct ibv_send_wr 	snd_wr;
-	struct ibv_send_wr	*bad_snd_wr = NULL;
-	struct ibv_wc 		wc;
-	int 				ret = -1;
-
-	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
-	pcc->snd_sge.lkey = pcc->kvs_request_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_WRITE;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("ibv_post_send() failed");
-		return -errno;
-	}
-
-	ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
-	if(ret != 1) {
-		log_err("retrieve_work_completion_events() failed");
-		return ret;
-	}
-	debug("Buffer written to server\n");
-
-	pcc->snd_sge.addr = (uint64_t) pcc->response_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->response_mr->length;
-	pcc->snd_sge.lkey = pcc->response_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_READ;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	/* same remote data as we wrote to before */
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("failed to read from remote address");
-		return -errno;
-	}
-
-	ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
-	if(ret != 1) {
-		log_err("failed to retrieve work completion");
-		return ret;
-	}
-	debug("Completed reading remote address\n");
-	show_rdma_buffer_attr(&(pcc->server_md_attr));
 	return 0;
 }
 
@@ -871,7 +811,7 @@ int rdma_poll_cq(struct ibv_cq *cq,
 				useconds_t timeout)
 {
 	int ret = -1, total_wc = 0;
-
+	debug("polling for %d wcs\n", max_wc);
 	do {
 		/* check for work completions */
 		ret = ibv_poll_cq(cq, max_wc - total_wc, wc + total_wc);
@@ -881,13 +821,19 @@ int rdma_poll_cq(struct ibv_cq *cq,
 		}
 		total_wc += ret;
 
+		if(ret > 0) {
+			ret = validate_wcs(wc, total_wc);
+			if(ret) return ret;
+		}
+
+		//debug("polled, %d wc total\n", total_wc);
 		if(total_wc < max_wc && timeout > 0) {
 			usleep(timeout);
 		}
 	} while(total_wc < max_wc);
 
-	ret = validate_wcs(wc, total_wc);
-	if(ret) return ret;
+	/*ret = validate_wcs(wc, total_wc);
+	if(ret) return ret;*/
 
 	return total_wc;
 }
@@ -897,7 +843,7 @@ int rdma_spin_cq(struct ibv_cq *cq,
 				int max_wc)
 {
 	int ret = -1, total_wc = 0;
-
+	debug("polling for %d wcs\n", max_wc);
 	do {
 		/* check for work completions */
 		ret = ibv_poll_cq(cq, max_wc - total_wc, wc + total_wc);
@@ -906,10 +852,15 @@ int rdma_spin_cq(struct ibv_cq *cq,
 			return -ret;
 		}
 		total_wc += ret;
+		if(ret > 0) {
+			ret = validate_wcs(wc, total_wc);
+			if(ret) return ret;
+		}
+		//debug("polled, %d wc total\n", total_wc);
 	} while(total_wc < max_wc);
 
-	ret = validate_wcs(wc, total_wc);
-	if(ret) return ret;
+	/*ret = validate_wcs(wc, total_wc);
+	if(ret) return ret;*/
 
 	return total_wc;
 }
@@ -941,7 +892,28 @@ int validate_wcs(struct ibv_wc *wc, int tot)
 			log_err("WC error: %s [OPCODE: %d]", 
 				ibv_wc_status_str(wc[i].status),
 				wc[i].opcode);
+			switch(wc[i].opcode) {
+				case IBV_WC_SEND:
+					debug("SEND FAILED\n");
+					break;
+				case IBV_WC_RECV:
+					debug("RECV FAILED\n");
+					break;
+				default:
+					break;
+			}
 			return -(wc[i].status);
+		} else {
+			switch(wc[i].opcode) {
+				case IBV_WC_SEND:
+					debug("SEND completed\n");
+					break;
+				case IBV_WC_RECV:
+					debug("RECV completed\n");
+					break;
+				default:
+					break;
+			}
 		}
 	}
 	return 0;
@@ -957,7 +929,7 @@ int rdma_cm_event_rcv(struct rdma_event_channel *ec,
 		log_err("failed to retrieve cm event");
 		return -errno;
 	}
-	
+
 	if((*cme)->status != 0) {
 		log_err("event has non zero status: %d", (*cme)->status);
 		rdma_ack_cm_event(*cme);
