@@ -6,6 +6,7 @@ Bachelor project 2021
 ### Todo
 - fix bugs:
 	- sometimes hangs on connect.. dont know why..
+- replace all regular poll with epoll()
 - allow server to handle multiple clients:
 	- very naively polls on event channel now, i.e. handles connect and disconnect, does so for multiple clients up to MAX\_CLIENTS
 	- now polls on WRITEable memory associated with client (kinda spins on it tho..)
