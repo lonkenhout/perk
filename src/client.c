@@ -76,11 +76,6 @@ int client(PEARS_CLT_CTX *pcc)
 	int ret = -1;
 	/* set the CQ to nonblock */
 	set_comp_channel_non_block(pcc->comp_channel);
-	struct pollfd cq_poll;
-
-	cq_poll.fd = pcc->comp_channel->fd;
-	cq_poll.events = POLLIN;
-	cq_poll.revents = 0;
 
 	int count = 0;
 	while(count < 450000) {
@@ -103,27 +98,7 @@ int client(PEARS_CLT_CTX *pcc)
 		struct ibv_wc wc;
 			
 		debug("Waiting for completion \n");
-		/* block on completion channel until its received */
-		/*int tries = 0;
-		do{
-			ret = poll(&cq_poll, 1, 1);
-			if(tries > 5) {
-				//try 5 times to check whether the cq triggered an event
-				break;
-			}
-			tries++;
-		} while(ret == 0);
-		if(ret < 0) {
-			log_err("poll failed\n");
-			return -errno;
-		}
-		debug("Retrieving completion for buffer\n");
-		ret = retrieve_work_completion_events(pcc->comp_channel, &wc, 1);
-		if(ret != 1 && pcc->response[0] == 0) {
-			log_err("retrieve_work_completion_events() failed");
-			exit(1);
-		}*/
-		//ret = rdma_poll_cq(pcc->cq, &wc, 1, 1000);
+
 		ret = rdma_spin_cq(pcc->cq, &wc, 1);
 		if(ret != 1) {
 			log_err("rdma_poll_cq() failed");
