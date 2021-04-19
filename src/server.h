@@ -2,7 +2,6 @@
 #define __PEARS_SERVER_H__
 
 #include <stdio.h>
-//#include <sys/epoll.h>
 
 
 #include <glib.h>

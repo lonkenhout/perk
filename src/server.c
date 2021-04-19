@@ -111,7 +111,7 @@ int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	int ret = -1;
 	ret = finalize_client_conn(pc_conn);
 	if(ret) {
-		log_err("send_md_s2c() failed");
+		log_err("finalize_client_conn() failed");
 		return POLL_CLIENT_CONNECT_FAILED;
 	}
 
@@ -225,38 +225,39 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 
 void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 {
-	//struct epoll_event ev, events[MAX_EVENTS];
-	//int epollfd, n_fds;
-	int n_fds = MAX_EVENTS+1, num_open_fds = 1;
-	struct pollfd *pfds;
+	struct epoll_event ev, events[MAX_EVENTS];
+	int epollfd, n_fds;
+	/*int n_fds = MAX_EVENTS+1, num_open_fds = 1;
+	struct pollfd *pfds;*/
+
 	struct timeval start, end;
 
     int i, res = 0, done = 0, ops = 0;
     debug("preparing poll\n");
-	/*epollfd = epoll_create1(0);
+	epollfd = epoll_create1(0);
 	if(epollfd == -1) {
 		log_err("epoll_create1() failed");
 		return;
-	}*/
+	}
 	char *k = calloc(MAX_LINE_LEN, sizeof(*k));
 	char *v = calloc(MAX_LINE_LEN, sizeof(*v));
-	pfds = calloc(n_fds, sizeof(struct pollfd));
+	/*pfds = calloc(n_fds, sizeof(struct pollfd));
 	if(pfds == NULL) {
 		log_err("allocating polling structures failed");
 		return;
 	}
 
 	pfds[0].events = POLLIN;
-	pfds[0].fd = psc->cm_ec->fd;
+	pfds[0].fd = psc->cm_ec->fd;*/
 
 	debug("adding event channel to poll fds\n");
 	/* add event channel to fds polled on */
-	/*ev.events = EPOLLIN;
+	ev.events = EPOLLIN;
 	ev.data.fd = psc->cm_ec->fd;
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, psc->cm_ec->fd, &ev) == -1) {
 		log_err("epoll_ctl() failed");
 		return;
-	}*/
+	}
 	//TODO: self-pipe trick so we can intercept ctrl-c and still clean up
 	debug("polling now....\n");
 	int ready;
@@ -264,16 +265,16 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	get_time(&start);
     while(1){
     	//printf("polling....\n");
-        //n_fds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
-        ready = poll(pfds, num_open_fds, POLL_TIMEOUT);
-		if(ready == -1) {
-			log_err("poll_wait failed");
+        n_fds = epoll_wait(epollfd, events, MAX_EVENTS, POLL_TIMEOUT);
+        //ready = poll(pfds, num_open_fds, POLL_TIMEOUT);
+		if(n_fds == -1) {
+			log_err("epoll_wait failed");
 			return;
 		}
 
-		for(i = 0; i < num_open_fds; ++i) {
-			//if(events[i].data.fd == psc->cm_ec->fd) {
-			if(i == 0 && pfds[i].revents != 0) {
+		for(i = 0; i < n_fds; ++i) {
+			if(events[i].data.fd == psc->cm_ec->fd) {
+			//if(i == 0 && pfds[i].revents != 0) {
 				//printf("Performed %d ops\n", ops);
 				debug("cm event channel ready\n");
 
