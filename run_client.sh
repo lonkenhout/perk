@@ -3,7 +3,7 @@
 infile=input.in
 if [ $# -eq 0 ]
 then
-	ip=127.0.0.1
+	ip=10.149.0.57
 	port=20838
 	echo "Using default params: IP $ip PORT $port"
 	./bin/pears_client -a $ip -p $port -i $infile

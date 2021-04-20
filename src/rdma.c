@@ -296,32 +296,38 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	//struct rdma_cm_event *cme = NULL;
 	int ret = -1;
 
+	debug("1disconnecting client con\n");
 	rdma_destroy_qp(pc_conn->cm_cid);
 	ret = rdma_destroy_id(pc_conn->cm_cid);
 	if(ret) {
 		log_err("rdma_destroy_id() failed");
 	}
 
+	debug("2disconnecting client con\n");
 	ret = ibv_destroy_cq(pc_conn->cq);
 	if(ret) {
 		log_err("ibv_destroy_cq() failed");
 	}
 
+	debug("3disconnecting client con\n");
 	ret = ibv_destroy_comp_channel(pc_conn->io_cc);
 	if(ret) {
 		log_err("ibv_destroy_comp_channel() failed");
 	}
 
-	rdma_buffer_free(pc_conn->server_buf);
-	rdma_buffer_free(pc_conn->response_mr);
-	rdma_buffer_deregister(pc_conn->md);
-	rdma_buffer_deregister(pc_conn->server_md);
+	debug("4disconnecting client con\n");
+	//rdma_buffer_free(pc_conn->server_buf);
+	//rdma_buffer_free(pc_conn->response_mr);
+	//rdma_buffer_deregister(pc_conn->md);
+	//rdma_buffer_deregister(pc_conn->server_md);
 	
 
-	ret = ibv_dealloc_pd(pc_conn->pd);
+	debug("5disconnecting client con\n");
+	//ret = ibv_dealloc_pd(pc_conn->pd);
 	if(ret) {
 		log_err("ibv_dealloc_pd() failed");
 	}
+	debug("ih3qnfiinwieonfw\n");
 
 	return 0;
 }

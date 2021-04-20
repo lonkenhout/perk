@@ -78,7 +78,7 @@ int client(PEARS_CLT_CTX *pcc)
 	set_comp_channel_non_block(pcc->comp_channel);
 
 	int count = 0;
-	while(count < 450000) {
+	while(count < 5) {
 		get_input(&(pcc->kvs_request), MAX_LINES);
 
 		/* post receive, we always expect a response */

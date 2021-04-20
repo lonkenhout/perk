@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <pthread.h>
+#include <semaphore.h>
+
 #include <infiniband/verbs.h>
 #include <rdma/rdma_cma.h>
 
@@ -34,6 +37,7 @@ typedef struct pears_server_context{
 	struct ibv_cq				*cq;
 	struct ibv_qp_init_attr 	qp_init_attr;
 	
+	uint32_t			total_ops;
 } PEARS_SVR_CTX;
 
 typedef struct pears_client_context{
@@ -72,6 +76,15 @@ typedef struct pears_client_conn{
 	struct sockaddr				*addr;
 	struct rdma_cm_id			*cm_cid;
 
+	uint32_t				ops;
+	pthread_mutex_t				dc_mutex;
+	int					dc;
+	pthread_mutex_t				put_mutex;
+	int					put;
+	pthread_cond_t				put_done;
+	char 					k[MAX_KEY_SIZE];
+	char					v[MAX_VAL_SIZE];
+
 	struct ibv_pd				*pd;
 	struct ibv_qp				*qp;
 	struct ibv_cq				*cq;
@@ -90,12 +103,12 @@ typedef struct pears_client_conn{
 	struct ibv_mr				*response_mr;
 } PEARS_CLIENT_CONN;
 
-
 #define MAX_CLIENTS (8)
 typedef struct pears_client_collection{
-	int active[MAX_CLIENTS];
-	int established[MAX_CLIENTS];
-	PEARS_CLIENT_CONN clients[MAX_CLIENTS];
+	int 					active[MAX_CLIENTS];
+	int 					established[MAX_CLIENTS];
+	PEARS_CLIENT_CONN 			clients[MAX_CLIENTS];
+	pthread_t			thread;
 } PEARS_CLIENT_COLL;
 
 

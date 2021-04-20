@@ -14,6 +14,7 @@
 #include <sys/epoll.h>
 #include <sys/time.h>
 #include <time.h>
+#include <pthread.h>
 //#include <netinet/in.h>
 //#include <sys/socket.h>
 
@@ -27,7 +28,7 @@ enum REQUEST_TYPE {
 	MALFORMED
 };
 
-//#define PEARS_DEBUG (1)
+#define PEARS_DEBUG (1)
 
 #define SCALE_SEC	(1.0)
 #define SCALE_MSEC	(1000.0)
