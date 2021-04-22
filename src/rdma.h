@@ -76,14 +76,7 @@ typedef struct pears_client_conn{
 	struct sockaddr				*addr;
 	struct rdma_cm_id			*cm_cid;
 
-	uint32_t				ops;
-	pthread_mutex_t				dc_mutex;
-	int					dc;
-	pthread_mutex_t				put_mutex;
-	int					put;
-	pthread_cond_t				put_done;
-	char 					k[MAX_KEY_SIZE];
-	char					v[MAX_VAL_SIZE];
+	uint32_t					ops;
 
 	struct ibv_pd				*pd;
 	struct ibv_qp				*qp;
@@ -107,8 +100,8 @@ typedef struct pears_client_conn{
 typedef struct pears_client_collection{
 	int 					active[MAX_CLIENTS];
 	int 					established[MAX_CLIENTS];
-	PEARS_CLIENT_CONN 			clients[MAX_CLIENTS];
-	pthread_t			thread;
+	PEARS_CLIENT_CONN 		clients[MAX_CLIENTS];
+	pthread_t				threads[MAX_CLIENTS];
 } PEARS_CLIENT_COLL;
 
 
