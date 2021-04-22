@@ -9,6 +9,9 @@ static KV_CACHE *kv_cache = NULL;
 static PEARS_SVR_CTX *psc = NULL;
 static PEARS_CLIENT_COLL *conns = NULL;
 
+/* mutex for performing put requests from a worker */
+static pthread_mutex_t put_mutex;
+
 /* usage */
 void print_usage(char *cmd){
 	printf("Usage:\n");
@@ -57,7 +60,9 @@ void pears_kv_destroy()
 
 void pears_kv_insert(void *key, void *val)
 {
+	pthread_mutex_lock(&put_mutex);
 	g_hash_table_insert(ght, g_strdup(key), g_strdup(val));
+	pthread_mutex_unlock(&put_mutex);
 }
 
 char *pears_kv_get(void *key)
@@ -192,9 +197,10 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			conn_i = client_coll_find_conn(conns, src);
 			printf("finalizing connection at entry %d\n", conn_i);
 			pc_conn = &(conns->clients[conn_i]);
+
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
-			pthread_create(&(conns[conn_i].thread), NULL, worker, (void*) pc_conn);
+			pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
 				conns->established[conn_i] = 1;
 				ret = conn_i;
@@ -203,26 +209,22 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			}
 			break;
 		case RDMA_CM_EVENT_DISCONNECTED:
+			conn_i = client_coll_find_conn(conns, src);
+			pc_conn = &(conns->clients[conn_i]);
 			ret = rdma_ack_cm_event(cm_event);
 			if(ret) {
 				log_err("failed to ACK cm event");
 				return -errno;
 			}
-			conn_i = client_coll_find_conn(conns, src);
-			printf("entry %d\n", conn_i);
-			pc_conn = &(conns->clients[conn_i]);
-			ret = process_disconnect_req(psc, pc_conn);
+			/* wait for thread to complete */
+			pthread_join(conns->threads[conn_i], NULL);
 			
-			debug("stuff\n");
+			ret = process_disconnect_req(psc, pc_conn);
 			conns->active[conn_i] = 0;
-			debug("stuff\n");
 			conns->established[conn_i] = 0;
-			debug("stuff\n");
 			psc->total_ops += pc_conn->ops;
-			debug("stuff\n");
-			pthread_mutex_lock(&(pc_conn->dc_mutex));
-			pc_conn->dc = 1;
-			pthread_mutex_unlock(&(pc_conn->dc_mutex));
+			pc_conn->ops = 0;
+
 			if(ret == POLL_CLIENT_DISCONNECT_SUCCESS) {
 				ret = -1;
 			} else {
@@ -240,29 +242,23 @@ void *worker(void *args)
 {
 	int res, sem_val = 0;
 	char k[MAX_LINE_LEN] = {0,};
-        char v[MAX_LINE_LEN] = {0,};
+	char v[MAX_LINE_LEN] = {0,};
 	memset(k, 0, sizeof(k));
 	memset(v, 0, sizeof(v));
 
+	struct timeval s, e;
+
 	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
 	while(1){
-		/* check semaphore, if 1, exit the thread */
-		pthread_mutex_lock(&(pcc->dc_mutex));
-		if(pcc->dc == 1) {
-			pthread_mutex_unlock(&(pcc->dc_mutex));
-			break;
-		}
-		pthread_mutex_unlock(&(pcc->dc_mutex));
-
-
 		char *buf = (char*)pcc->server_buf->addr;
 		res = parse_request(buf, 
-							pcc->k, MAX_KEY_SIZE, 
-							pcc->v, MAX_VAL_SIZE);
+							k, MAX_KEY_SIZE, 
+							v, MAX_VAL_SIZE);
 		if(res == GET) {
+			//get_time(&s);
 			struct ibv_wc wc;
 			debug("Get request received: {%s}\n", k);
-			char *val = pears_kv_get(pcc->k);
+			char *val = pears_kv_get(k);
 			if(val == NULL) {
 				//printf("Key not found or key is null..\n");
 				val = "EMPTY";
@@ -277,30 +273,28 @@ void *worker(void *args)
 			
 			if(res) {
 				log_err("rdma_post_send() failed");
-				return;
+				return NULL;
 			}
 			debug("Sent result, waiting for completion\n");
 			res = retrieve_work_completion_events(pcc->io_cc, &wc, 1);
 			if(res != 1) {
 				log_err("retrieve_work_completion_events() failed");
-				return;
+				return NULL;
 			}
 			memset(pcc->response_mr->addr, 0 , pcc->response_mr->length);
+			//get_time(&e);
+			//double time = compute_time(s, e, SCALE_MCSEC);
+			//printf("[TIMING] Get: %.2fus\n", time);
 			debug("Completed send\n");
 			pcc->ops++;
 			//pears_kv_list_all();
 		} else if(res == PUT) {
+			//get_time(&s);
 			struct ibv_wc wc;
-			/*struct ibv_wc wc;
 			debug("Put request received: {%s, %s}\n", k, v);
 
 			pears_kv_insert(k, v);
-			debug("Completed send\n");*/
-			/* lock the put mutex and set put to 1 */
-			pthread_mutex_lock(&(pcc->put_mutex));
-			pcc->put = 1;
-			pthread_cond_wait(&(pcc->put_done), &(pcc->put_mutex));
-			pthread_mutex_unlock(&(pcc->put_mutex));
+			debug("Completed send\n");
 			
 			/* cleanup and send response */
 			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
@@ -311,23 +305,43 @@ void *worker(void *args)
 
 			if(res) {
 				log_err("rdma_post_send() failed");
-				return;
+				return NULL;
 			}
 			debug("Sent result, waiting for completion\n");
-			res = retrieve_work_completion_events(pcc->io_cc, &wc, 1);
+			res = rdma_spin_cq(pcc->cq, &wc, 1);
 			if(res != 1) {
 				log_err("retrieve_work_completion_events() failed");
-				return;
+				return NULL;
 			}
 			memset(pcc->response_mr->addr, 0 , pcc->response_mr->length);
-			
+			//get_time(&e);
+			//double time = compute_time(s, e, SCALE_MCSEC);
+			//printf("[TIMING] Put: %.2fus\n", time);
 			pcc->ops++;
 			//kv_cache->count++;
 			//printf("==[KV CONTENTS]==\n");
 			//pears_kv_list_all();
+		} else if(res == EXIT) {
+			struct ibv_wc wc;
+			strcpy((char*)pcc->response_mr->addr, "OK");
+			
+			res = rdma_post_send(pcc->response_mr, pcc->qp);
+
+			if(res) {
+				log_err("rdma_post_send() failed");
+				return NULL;
+			}
+			debug("Sent result, waiting for completion\n");
+			res = rdma_spin_cq(pcc->cq, &wc, 1);
+			if(res != 1) {
+				log_err("retrieve_work_completion_events() failed");
+				return NULL;
+			}
+			break;
 		}
 		rdma_clear_cq(pcc->cq);
 	}
+	return NULL;
 }
 
 void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
@@ -336,7 +350,7 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	int epollfd, n_fds;
 	/*int n_fds = MAX_EVENTS+1, num_open_fds = 1;
 	struct pollfd *pfds;*/
-	
+	pthread_mutex_init(&put_mutex, NULL);
 
 	struct timeval start, end;
 
@@ -347,6 +361,7 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 		log_err("epoll_create1() failed");
 		return;
 	}
+
 	char *k = calloc(MAX_LINE_LEN, sizeof(*k));
 	char *v = calloc(MAX_LINE_LEN, sizeof(*v));
 	/*pfds = calloc(n_fds, sizeof(struct pollfd));
@@ -414,10 +429,10 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			}
 		}
 
-		for(i = 0; i < MAX_CLIENTS; ++i) {
+		/*for(i = 0; i < MAX_CLIENTS; ++i) {
 			if(conns->established[i]) {
 				PEARS_CLIENT_CONN *pcc = &(conns->clients[i]);
-				/* try locking the mutex */
+				// try locking the mutex
 				pthread_mutex_lock(&(pcc->put_mutex));
 				if(conns->clients[i].put == 1){
 					char *buf = (char*)pcc->server_buf->addr;
@@ -427,8 +442,9 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 				pthread_mutex_unlock(&(pcc->put_mutex));
 				pthread_cond_signal(&(pcc->put_done));
 			}
-		}
+		}*/
     }
+    pthread_mutex_destroy(&put_mutex);
     destroy_server_dev(psc);
 	pears_kv_destroy();
 	free(kv_cache);
