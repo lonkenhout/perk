@@ -25,10 +25,11 @@ enum REQUEST_TYPE {
 	GET,
 	PUT,
 	EMPTY,
+	EXIT,
 	MALFORMED
 };
 
-#define PEARS_DEBUG (1)
+//#define PEARS_DEBUG (1)
 
 #define SCALE_SEC	(1.0)
 #define SCALE_MSEC	(1000.0)

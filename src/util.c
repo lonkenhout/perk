@@ -14,9 +14,14 @@ int parse_request(char *request,
 		case 'G':
 			ret = parse_get_request(request + 2, k, k_sz);
 			break;
+		case 'E':
+			ret = EXIT;
+			break;
 		default:
-			return EMPTY;
+			ret = EMPTY;
+			break;
 	}
+	return ret;
 }
 
 int parse_put_request(char *request, 
