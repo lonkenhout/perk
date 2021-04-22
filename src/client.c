@@ -78,7 +78,7 @@ int client(PEARS_CLT_CTX *pcc)
 	set_comp_channel_non_block(pcc->comp_channel);
 
 	int count = 0;
-	while(count < 5) {
+	while(count < 100000) {
 		get_input(&(pcc->kvs_request), MAX_LINES);
 
 		/* post receive, we always expect a response */
@@ -113,6 +113,33 @@ int client(PEARS_CLT_CTX *pcc)
 
 		count++;
 	}
+
+	/* send exit to server */
+	strcpy(pcc->kvs_request, "E");
+	/* post receive, we always expect a response */
+	ret = rdma_post_recv(pcc->response_mr, pcc->qp);
+	if(ret) {
+		log_err("rdma_post_recv() failed");
+		return 1;
+	}
+
+	/* write to the server */
+	ret = rdma_write_c2s_non_block(pcc);
+	if(ret) {
+		log_err("rdma_write_c2s() failed");
+		return 1;
+	}
+
+	struct ibv_wc wc;
+		
+	debug("Waiting for completion \n");
+
+	ret = rdma_spin_cq(pcc->cq, &wc, 1);
+	if(ret != 1) {
+		log_err("rdma_poll_cq() failed");
+		exit(1);
+	}
+
 	return 0;
 }
 
