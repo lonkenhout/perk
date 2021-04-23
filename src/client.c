@@ -35,7 +35,8 @@ int parse_opts(int argc, char **argv){
 				debug("opening %s\n", optarg);
 				f_ptr = fopen(optarg, "r");
 				if(!f_ptr) {
-					log_err("opening file failed, using stdin instead");
+					//log_err("opening file failed, using default instead");
+					printf("opening file failed, using default request instead\n");
 				} else {
 					using_file = 1;
 				}
@@ -82,8 +83,11 @@ int client(PEARS_CLT_CTX *pcc)
 	/* set the CQ to nonblock */
 	set_comp_channel_non_block(pcc->comp_channel);
 
-	get_input(&(pcc->kvs_request), MAX_LINES);
-
+	if(using_file) {
+		get_input(&(pcc->kvs_request), MAX_LINES);
+	} else {
+		strcpy(pcc->kvs_request, "G:key123");
+	}
 	int count = 0;
 	/* do the same request 10 million times */
 	while(count < max_reqs) {
