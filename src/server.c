@@ -158,7 +158,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 
 	switch(cm_event->event) {
 		case RDMA_CM_EVENT_CONNECT_REQUEST:
-			printf("processing connect request\n");
+			debug("processing connect request\n");
 			ret = rdma_ack_cm_event(cm_event);
 			if(ret) {
 				log_err("failed to ACK cm event");
@@ -180,7 +180,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			//set_comp_channel_non_block(pc_conn->io_cc);
 			break;
 		case RDMA_CM_EVENT_ESTABLISHED:
-			printf("processing established request\n");
+			debug("processing established request\n");
 			ret = rdma_ack_cm_event(cm_event);
 			if(ret) {
 				log_err("failed to ACK cm event");
@@ -188,7 +188,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			}
 			/* find the entry setup at */
 			conn_i = client_coll_find_conn(conns, src);
-			printf("finalizing connection at entry %d\n", conn_i);
+			debug("finalizing connection at entry %d\n", conn_i);
 			pc_conn = &(conns->clients[conn_i]);
 
 			/* finalize the connection */
