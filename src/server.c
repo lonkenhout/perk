@@ -125,7 +125,7 @@ int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		log_err("send_md_s2c() failed");
 		return POLL_CLIENT_CONNECT_FAILED;
 	}
-	return POLL_CLIENT_CONNECT_SUCCESS;
+	return POLL_CLIENT_CONNECT_ESTABLISHED;
 }
 
 int process_disconnect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
@@ -179,7 +179,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
 				conns->active[conn_i] = 1;
 				printf("added client to entry: %d\n", conn_i);
-				ret = conn_i;
+				ret = 0;
 			} else {
 				ret = -2;
 			}
@@ -201,9 +201,8 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
 			pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
-			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
+			if(ret == POLL_CLIENT_CONNECT_ESTABLISHED) {
 				conns->established[conn_i] = 1;
-				ret = conn_i;
 			} else {
 				ret = -2;
 			}
@@ -282,9 +281,9 @@ void *worker(void *args)
 				return NULL;
 			}
 			memset(pcc->response_mr->addr, 0 , pcc->response_mr->length);
-			//get_time(&e);
-			//double time = compute_time(s, e, SCALE_MCSEC);
-			//printf("[TIMING] Get: %.2fus\n", time);
+			/*get_time(&e);
+			double time = compute_time(s, e, SCALE_MCSEC);
+			printf("[TIMING] Get: %.2fus\n", time);*/
 			debug("Completed send\n");
 			pcc->ops++;
 			//pears_kv_list_all();
@@ -314,9 +313,9 @@ void *worker(void *args)
 				return NULL;
 			}
 			memset(pcc->response_mr->addr, 0 , pcc->response_mr->length);
-			//get_time(&e);
-			//double time = compute_time(s, e, SCALE_MCSEC);
-			//printf("[TIMING] Put: %.2fus\n", time);
+			/*get_time(&e);
+			double time = compute_time(s, e, SCALE_MCSEC);
+			printf("[TIMING] Put: %.2fus\n", time);*/
 			pcc->ops++;
 			//kv_cache->count++;
 			//printf("==[KV CONTENTS]==\n");
@@ -386,9 +385,11 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	int ready;
 	/* get start time */
 	get_time(&start);
+	int clients_connected = 0;
+	/* first wait for all clients */
 	while(1){
 		//printf("polling....\n");
-		n_fds = epoll_wait(epollfd, events, MAX_EVENTS, POLL_TIMEOUT);
+		n_fds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 		//ready = poll(pfds, num_open_fds, POLL_TIMEOUT);
 		if(n_fds == -1) {
 			log_err("epoll_wait failed");
@@ -401,48 +402,35 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 				//printf("Performed %d ops\n", ops);
 				debug("cm event channel ready\n");
 
-				/* accept or disconnect */
+				// accept or disconnect
 				printf("checking cm_event\n");
 				res = process_cm_event(psc, conns);
 
-				/* res will contain entry that was accepted, 0 on disconnect, -1 on error */
 				if(res == -2) {
 					log_err("process_cm_event() failed, continuing...");
 				} else if(res == -1) {
-					//means disconnection
 					//TODO: remove fd from fd set somehow
-					debug("disconnect processed successfully\n");
-					get_time(&end);
-					double time = compute_time(start, end, SCALE_MSEC);
-					printf("== processed %d requests in %.0f ms\n",
-							psc->total_ops, time);
-					printf("== ops/s: %.1f\n", psc->total_ops/(time/1000));
-					psc->total_ops = 0;
-				} else {
-					/* client connected, start timer */
-					get_time(&start);				
-				}
+					clients_connected--;
+					if(clients_connected == 0) {
+						get_time(&end);
+						double time = compute_time(start, end, SCALE_MSEC);
+						printf("== processed %d requests in %.0f ms\n",
+								psc->total_ops, time);
+						printf("== ops/s: %.1f\n", psc->total_ops/(time/1000));
+						psc->total_ops = 0;
 
-				//TODO: add completion channel(?) fd to set of polled on fds
-				//		should do in process_cm_event() or make process_cm_event()
-				//		return whether it was a connect or disconnect so can do here				
+					}
+					debug("disconnect processed successfully\n");
+				} else if(res == POLL_CLIENT_CONNECT_ESTABLISHED){
+					// client connected, start timer
+					clients_connected++;
+					if(clients_connected == 1) {
+						get_time(&start);
+					}
+				}
 			}
 		}
 
-		/*for(i = 0; i < MAX_CLIENTS; ++i) {
-			if(conns->established[i]) {
-				PEARS_CLIENT_CONN *pcc = &(conns->clients[i]);
-				// try locking the mutex
-				pthread_mutex_lock(&(pcc->put_mutex));
-				if(conns->clients[i].put == 1){
-					char *buf = (char*)pcc->server_buf->addr;
-					pears_kv_insert(pcc->k, pcc->v);
-				}
-				
-				pthread_mutex_unlock(&(pcc->put_mutex));
-				pthread_cond_signal(&(pcc->put_done));
-			}
-		}*/
     }
     pthread_mutex_destroy(&put_mutex);
     destroy_server_dev(psc);

@@ -31,7 +31,7 @@ typedef struct kv_cache {
 
 #define POLL_CLIENT_CONNECT_SUCCESS 	(1)
 #define POLL_CLIENT_DISCONNECT_SUCCESS	(2)
-
+#define POLL_CLIENT_CONNECT_ESTABLISHED (3)
 
 void *worker(void *args);
 
