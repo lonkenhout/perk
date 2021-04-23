@@ -1,9 +1,9 @@
-count=10000000
+count=5000000
 infile=input.in
 if [ $# -eq 0 ]
 then
 	ip=10.149.0.53
-	port=5023
+	port=20838
 	echo "Using default params: IP $ip PORT $port"
 	./bin/pears_client -a $ip -p $port -i $infile -c $count
 elif [ $# -eq 1 ]
