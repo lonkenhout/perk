@@ -77,10 +77,11 @@ int client(PEARS_CLT_CTX *pcc)
 	/* set the CQ to nonblock */
 	set_comp_channel_non_block(pcc->comp_channel);
 
-	int count = 0;
-	while(count < 100000) {
-		get_input(&(pcc->kvs_request), MAX_LINES);
+	get_input(&(pcc->kvs_request), MAX_LINES);
 
+	int count = 0;
+	/* do the same request 10 million times */
+	while(count < 10000000) {
 		/* post receive, we always expect a response */
 		ret = rdma_post_recv(pcc->response_mr, pcc->qp);
 		if(ret) {
@@ -104,13 +105,9 @@ int client(PEARS_CLT_CTX *pcc)
 			log_err("rdma_poll_cq() failed");
 			exit(1);
 		}
-		//printf("%s:%s\n", pcc->kvs_request, pcc->response);
+		debug("%s:%s\n", pcc->kvs_request, pcc->response);
 
 		memset(pcc->response, 0, sizeof(pcc->response_mr->length));
-
-		/* make sure the cq is empty */
-		//rdma_clear_cq(pcc->cq);
-
 		count++;
 	}
 

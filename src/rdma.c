@@ -720,17 +720,14 @@ int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp)
 	struct ibv_sge sg;
 	struct ibv_recv_wr wr;
 	struct ibv_recv_wr *bad_wr = NULL;
-	debug("RECV: sg\n");
 	memset(&sg, 0, sizeof(sg));
 	sg.addr = (uint64_t)mr->addr;
 	sg.length = (uint32_t)mr->length;
 	sg.lkey = (uint32_t)mr->lkey;
 
-	debug("RECV: %lx\n", sg.addr);
 	memset(&wr, 0, sizeof(wr));
 	wr.sg_list = &sg;
 	wr.num_sge = 1;
-	debug("RECV: posting 0x%p\n", (void*)&wr);
 	if(ibv_post_recv(qp, &wr, &bad_wr)) {
 		log_err("ibv_post_recv() failed");
 		return -errno;
@@ -744,18 +741,15 @@ int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp)
 	struct ibv_send_wr wr;
 	struct ibv_send_wr *bad_wr = NULL;
 
-	debug("SEND: sg\n");
 	memset(&sg, 0, sizeof(sg));
 	sg.addr = (uint64_t) mr->addr;
 	sg.length = (uint32_t)mr->length;
 	sg.lkey = (uint32_t)mr->lkey;
-	debug("SEND: wr %lx\n", sg.addr);
 	memset(&wr, 0, sizeof(wr));
 	wr.sg_list = &sg;
 	wr.num_sge = 1;
 	wr.opcode = IBV_WR_SEND;
 	wr.send_flags = IBV_SEND_SIGNALED;
-	debug("SEND: posting 0x%p\n", (void*)&wr);
 	if(ibv_post_send(qp, &wr, &bad_wr)) {
 		log_err("ibv_post_send() failed");
 		return -errno;
@@ -803,7 +797,7 @@ int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *
 	return total_wc;
 }
 
-/* poll on cq directly */
+/* poll on cq directly using timeout */
 int rdma_poll_cq(struct ibv_cq *cq,
 				struct ibv_wc *wc, 
 				int max_wc, 
@@ -825,18 +819,16 @@ int rdma_poll_cq(struct ibv_cq *cq,
 			if(ret) return ret;
 		}
 
-		//debug("polled, %d wc total\n", total_wc);
 		if(total_wc < max_wc && timeout > 0) {
 			usleep(timeout);
 		}
 	} while(total_wc < max_wc);
 
-	/*ret = validate_wcs(wc, total_wc);
-	if(ret) return ret;*/
 
 	return total_wc;
 }
 
+/* poll on cq, with no timeout, i.e. spinning */
 int rdma_spin_cq(struct ibv_cq *cq,
 				struct ibv_wc *wc, 
 				int max_wc)
