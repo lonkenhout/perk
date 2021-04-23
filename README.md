@@ -24,6 +24,19 @@ Bachelor project 2021
 - `cmake .` for config
 - `make` for compilation and linking
 
+## Run on DAS5
+- Reserve some nodes: `preserve -np 2 -t 900`
+
+### Server side
+1. `ssh node0..`, to connect to node
+2. `cd bsc-project-rdma`, to cd to folder with runscript
+3. `./run_server.sh`, to run server (no need to add IP, is now extracted from ifconfig)
+
+### Client side
+1. `ssh node0..`, to connect to node
+2. `cd bsc-project-rdma`, to cd to folder with runscript
+3. `./run_client.sh X`, to make client connect to node X (it just substitutes it in the IP address)
+
 ## Run
 - `python[3] get_small_workload.py` for generating a small sample workload
 - `bin/pears_server [ARGS]` for running server
