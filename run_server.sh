@@ -2,7 +2,7 @@
 
 if [ $# -eq 0 ]
 then
-	ip=0.0.0.0
+	ip=`ifconfig ib0 | grep "inet " | awk '{print $2}'`
 	port=20838
 	echo "Using default params: IP $ip PORT $port"
 	./bin/pears_server -a $ip -p $port
