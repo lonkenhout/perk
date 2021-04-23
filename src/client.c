@@ -6,6 +6,7 @@
 static PEARS_CLT_CTX *pcc = NULL;
 static FILE *f_ptr = NULL;
 static int using_file = 0;
+static int max_reqs = 10000000;
 
 /* usage */
 void print_usage(char *cmd){
@@ -16,7 +17,7 @@ void print_usage(char *cmd){
 /* parse options */
 int parse_opts(int argc, char **argv){
 	int ret = 0, option;
-	while((option = getopt(argc, argv, "a:p:i:")) != -1){
+	while((option = getopt(argc, argv, "a:p:i:c:")) != -1){
 		switch(option){
 			case 'a':
 				ret = get_addr(optarg, (struct sockaddr*) &(pcc->client_sa));
@@ -28,7 +29,7 @@ int parse_opts(int argc, char **argv){
 				break;
 			case 'p':
 				pcc->client_sa.sin_port = htons(strtol(optarg, NULL, 0));
-				debug("ip address set to %s\n", optarg);
+				debug("port set to %s\n", optarg);
 				break;
 			case 'i':
 				debug("opening %s\n", optarg);
@@ -38,6 +39,10 @@ int parse_opts(int argc, char **argv){
 				} else {
 					using_file = 1;
 				}
+				break;
+			case 'c':
+				max_reqs = strtol(optarg, NULL, 0);
+				debug("doing %s requests\n", );
 				break;
 			default:
 				print_usage(argv[0]);
@@ -81,7 +86,7 @@ int client(PEARS_CLT_CTX *pcc)
 
 	int count = 0;
 	/* do the same request 10 million times */
-	while(count < 10000000) {
+	while(count < max_reqs) {
 		/* post receive, we always expect a response */
 		ret = rdma_post_recv(pcc->response_mr, pcc->qp);
 		if(ret) {
