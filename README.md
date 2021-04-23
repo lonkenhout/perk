@@ -25,7 +25,11 @@ Bachelor project 2021
 - `make` for compilation and linking
 
 ## Run on DAS5
-- Reserve some nodes: `preserve -np 2 -t 900`
+- Make sure the right modules are loaded:
+`module load cmake/3.15.4
+module load gcc/9.3.0
+module load prun`
+- `preserve -np 2 -t 900`, to reserve some nodes
 
 ### Server side using default port
 1. `ssh node0..`, to connect to node
