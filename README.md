@@ -27,15 +27,17 @@ Bachelor project 2021
 ## Run on DAS5
 - Reserve some nodes: `preserve -np 2 -t 900`
 
-### Server side
+### Server side using default port
 1. `ssh node0..`, to connect to node
 2. `cd bsc-project-rdma`, to cd to folder with runscript
 3. `./run_server.sh`, to run server (no need to add IP, is now extracted from ifconfig)
+   `./run_server.sh 42`, to run server on port 42
 
 ### Client side
 1. `ssh node0..`, to connect to node
 2. `cd bsc-project-rdma`, to cd to folder with runscript
 3. `./run_client.sh X`, to make client connect to node X (it just substitutes it in the IP address)
+   `./run_client.sh X P`, to make client connect to node X on port P
 
 ## Run
 - `python[3] get_small_workload.py` for generating a small sample workload
