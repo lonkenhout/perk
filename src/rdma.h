@@ -65,10 +65,16 @@ typedef struct pears_client_context{
 
 	char						*response;
 	struct ibv_mr				*response_mr;
-
 	/* request util */
 	struct ibv_sge				rec_sge;
 	struct ibv_sge				snd_sge;
+	struct ibv_sge				wr_sge;
+	struct ibv_sge				rd_sge;
+
+	struct ibv_recv_wr 			recv_wr;
+	struct ibv_send_wr			send_wr;
+	struct ibv_send_wr 			wr_wr;
+	struct ibv_send_wr			rd_wr;
 } PEARS_CLT_CTX;
 
 typedef struct pears_client_conn{
@@ -86,14 +92,23 @@ typedef struct pears_client_conn{
 
 	struct ibv_mr				*md;
 	struct rdma_buffer_attr		md_attr;
-	struct ibv_sge				rec_sge;
-	struct ibv_sge				snd_sge;
 
 	struct ibv_mr				*server_buf;
 	struct ibv_mr				*server_md;
 	struct rdma_buffer_attr		server_md_attr;
 
 	struct ibv_mr				*response_mr;
+	struct ibv_mr				*imm_data;
+
+	struct ibv_sge				rec_sge;
+	struct ibv_sge				snd_sge;
+	struct ibv_sge				wr_sge;
+	struct ibv_sge				rd_sge;
+
+	struct ibv_recv_wr 			recv_wr;
+	struct ibv_send_wr			send_wr;
+	struct ibv_send_wr 			wr_wr;
+	struct ibv_send_wr			rd_wr;
 } PEARS_CLIENT_CONN;
 
 #define MAX_CLIENTS (8)
@@ -148,6 +163,16 @@ int client_disconnect(PEARS_CLT_CTX *pcc);
 int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp);
 int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp);
 
+void rdma_recv_wr_prepare(struct ibv_recv_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr);
+int rdma_post_recv_reuse(struct ibv_recv_wr *wr, struct ibv_qp *qp);
+
+void rdma_send_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr);
+int rdma_post_send_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp);
+
+void rdma_write_imm_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
+void rdma_write_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
+int rdma_post_write_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp);
+
 int rdma_clear_cq(struct ibv_cq *cq);
 
 struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd, void *addr, uint32_t length, enum ibv_access_flags perm);
@@ -157,7 +182,6 @@ int rdma_cm_event_rcv(struct rdma_event_channel *ec,
 					struct rdma_cm_event **cme);
 int rdma_cm_event_rcv_any(struct rdma_event_channel *ec,
 					struct rdma_cm_event **cme);
-int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *wc, int max_wc);
 int rdma_spin_cq(struct ibv_cq *cq, struct ibv_wc *wc, int max_wc);
 int rdma_poll_cq(struct ibv_cq *cq, struct ibv_wc *wc, int max_wc, useconds_t timeout);
 int validate_wcs(struct ibv_wc *wc, int tot);

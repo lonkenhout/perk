@@ -43,7 +43,7 @@ int parse_opts(int argc, char **argv){
 				break;
 			case 'c':
 				max_reqs = strtol(optarg, NULL, 0);
-				debug("doing %s requests\n", );
+				debug("doing %d requests\n", max_reqs);
 				break;
 			default:
 				print_usage(argv[0]);
@@ -88,24 +88,39 @@ int client(PEARS_CLT_CTX *pcc)
 	} else {
 		strcpy(pcc->kvs_request, "G:key123");
 	}
+
+	rdma_recv_wr_prepare(&(pcc->recv_wr), &(pcc->rec_sge), pcc->response_mr);
+	
+	//rdma_send_wr_prepare(pcc->send_wr, pcc->snd_sge, pcc->kvs_request_mr);
+	//rdma_post_send_reuse(pcc->send_wr, pcc->qp);
+	rdma_write_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
+	rdma_write_imm_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
+
 	int count = 0;
-	/* do the same request 10 million times */
+	/* do the same request max_reqs times */
 	while(count < max_reqs) {
+		struct ibv_wc wc;
 		/* post receive, we always expect a response */
-		ret = rdma_post_recv(pcc->response_mr, pcc->qp);
+		//ret = rdma_post_recv(pcc->response_mr, pcc->qp);
+		ret = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
 		if(ret) {
 			log_err("rdma_post_recv() failed");
 			return 1;
 		}
 
 		/* write to the server */
-		ret = rdma_write_c2s_non_block(pcc);
+		//ret = rdma_write_c2s_non_block(pcc);
+		ret = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
 		if(ret) {
 			log_err("rdma_write_c2s() failed");
 			return 1;
 		}
 
-		struct ibv_wc wc;
+		ret = rdma_spin_cq(pcc->cq, &wc, 1);
+		if(ret != 1) {
+			log_err("rdma_poll_cq() failed");
+			exit(1);
+		}
 			
 		debug("Waiting for completion \n");
 

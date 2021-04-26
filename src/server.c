@@ -119,6 +119,14 @@ int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		log_err("send_md_s2c() failed");
 		return POLL_CLIENT_CONNECT_FAILED;
 	}
+
+	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
+	ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
+	if(ret) {
+		log_err("failed to ACK cm event");
+		return -errno;
+	}
+
 	return POLL_CLIENT_CONNECT_ESTABLISHED;
 }
 
@@ -190,9 +198,16 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			conn_i = client_coll_find_conn(conns, src);
 			debug("finalizing connection at entry %d\n", conn_i);
 			pc_conn = &(conns->clients[conn_i]);
+			/*pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
+			ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
+			if(ret) {
+				log_err("failed to ACK cm event");
+				return -errno;
+			}*/
 
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
+
 			pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_ESTABLISHED) {
 				conns->established[conn_i] = 1;
@@ -239,16 +254,37 @@ void *worker(void *args)
 	memset(v, 0, sizeof(v));
 
 	struct timeval s, e;
+	
+
+
+	//rdma_post_send_reuse(pcc->send_wr, pcc->qp);
 
 	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
+
+	rdma_send_wr_prepare(&(pcc->send_wr), &(pcc->snd_sge), pcc->response_mr);
+
 	while(1){
+		struct ibv_wc wc;
+		/* we expect the completion of write with IMM */
+		res = rdma_spin_cq(pcc->cq, &wc, 1);
+		if(res != 1) {
+			log_err("retrieve_work_completion_events() failed");
+			return NULL;
+		}
+		/* prepost recv for next request */
+		res = rdma_post_recv(pcc->imm_data, pcc->qp);
+		if(res) {
+			log_err("failed to ACK cm event");
+			return NULL;
+		}
 		char *buf = (char*)pcc->server_buf->addr;
 		res = parse_request(buf, 
 							k, MAX_KEY_SIZE, 
 							v, MAX_VAL_SIZE);
+		
+		
 		if(res == GET) {
 			debug("Get request received: {%s}\n", k);
-			struct ibv_wc wc;
 			/* get request */
 			char *val = pears_kv_get(k);
 			if(val == NULL) {
@@ -258,7 +294,8 @@ void *worker(void *args)
 			/* clean up and send response */
 			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
 			strcpy((char*)pcc->response_mr->addr, val);
-			res = rdma_post_send(pcc->response_mr, pcc->qp);
+			//res = rdma_post_send(pcc->response_mr, pcc->qp);
+			rdma_post_send_reuse(&(pcc->send_wr), pcc->qp);
 			if(res) {
 				log_err("rdma_post_send() failed");
 				return NULL;
@@ -276,14 +313,14 @@ void *worker(void *args)
 			pcc->ops++;
 		} else if(res == PUT) {
 			debug("Put request received: {%s:%s}\n", k, v);
-			struct ibv_wc wc;
 			/* put request */
 			pears_kv_insert(k, v);
 			
 			/* cleanup and send response */
 			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
 			strcpy((char*)pcc->response_mr->addr, "INSERTED");
-			res = rdma_post_send(pcc->response_mr, pcc->qp);
+			//res = rdma_post_send(pcc->response_mr, pcc->qp);
+			rdma_post_send_reuse(&(pcc->send_wr), pcc->qp);
 			if(res) {
 				log_err("rdma_post_send() failed");
 				return NULL;

@@ -660,6 +660,7 @@ int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc)
 	return 0;
 }
 
+
 int client_disconnect(PEARS_CLT_CTX *pcc)
 {
 	struct rdma_cm_event *cme = NULL;
@@ -715,6 +716,80 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
  * Shared functions
  *
  **/
+void rdma_write_wr_prepare(struct ibv_send_wr *wr, 
+	struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr)
+{
+	sg->addr = (uint64_t) mr->addr;
+	sg->length = (uint32_t) mr->length;
+	sg->lkey = mr->lkey;
+	bzero(wr, sizeof(*wr));
+	wr->sg_list = sg;
+	wr->num_sge = 1;
+	wr->opcode = IBV_WR_RDMA_WRITE;
+	wr->send_flags = IBV_SEND_SIGNALED;
+	wr->wr.rdma.rkey = r_attr.stag.remote_stag;
+	wr->wr.rdma.remote_addr = r_attr.address;
+}
+
+void rdma_write_imm_wr_prepare(struct ibv_send_wr *wr, 
+	struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr)
+{
+	sg->addr = (uint64_t) mr->addr;
+	sg->length = (uint32_t) mr->length;
+	sg->lkey = mr->lkey;
+	bzero(wr, sizeof(*wr));
+	wr->sg_list = sg;
+	wr->num_sge = 1;
+	wr->opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+	wr->send_flags = IBV_SEND_SIGNALED;
+	wr->wr.rdma.rkey = r_attr.stag.remote_stag;
+	wr->wr.rdma.remote_addr = r_attr.address;
+}
+
+int rdma_post_write_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp)
+{
+	struct ibv_send_wr	*bad_snd_wr = NULL;
+	if(ibv_post_send(qp, wr, &bad_snd_wr)) {
+		log_err("ibv_post_send() failed");
+		return -errno;
+	}
+	return 0;
+}
+
+/*int rdma_post_write()
+{
+	struct ibv_send_wr 	snd_wr;
+	struct ibv_send_wr	*bad_snd_wr = NULL;
+	struct ibv_wc 		wc;
+	int 				ret = -1;
+
+	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
+	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
+	pcc->snd_sge.lkey = pcc->kvs_request_mr->lkey;
+	bzero(&snd_wr, sizeof(snd_wr));
+	snd_wr.sg_list = &(pcc->snd_sge);
+	snd_wr.num_sge = 1;
+	snd_wr.opcode = IBV_WR_RDMA_WRITE;
+	snd_wr.send_flags = IBV_SEND_SIGNALED;
+	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
+	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
+
+	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
+	if(ret) {
+		log_err("ibv_post_send() failed");
+		return -errno;
+	}
+
+	ret = rdma_spin_cq(pcc->cq, &wc, 1);
+	if(ret != 1) {
+		log_err("rdma_spin_cq() failed");
+		return ret;
+	}
+	debug("Buffer written to server\n");
+	return 0;
+}*/
+
+
 int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp)
 {
 	struct ibv_sge sg;
@@ -729,6 +804,28 @@ int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp)
 	wr.sg_list = &sg;
 	wr.num_sge = 1;
 	if(ibv_post_recv(qp, &wr, &bad_wr)) {
+		log_err("ibv_post_recv() failed");
+		return -errno;
+	}
+	return 0;
+}
+
+void rdma_recv_wr_prepare(struct ibv_recv_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr)
+{
+	memset(sg, 0, sizeof(sg));
+	sg->addr = (uint64_t)mr->addr;
+	sg->length = (uint32_t)mr->length;
+	sg->lkey = (uint32_t)mr->lkey;
+
+	memset(wr, 0, sizeof(wr));
+	wr->sg_list = sg;
+	wr->num_sge = 1;
+}
+
+int rdma_post_recv_reuse(struct ibv_recv_wr *wr, struct ibv_qp *qp)
+{
+	struct ibv_recv_wr *bad_wr = NULL;
+	if(ibv_post_recv(qp, wr, &bad_wr)) {
 		log_err("ibv_post_recv() failed");
 		return -errno;
 	}
@@ -757,44 +854,27 @@ int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp)
 	return 0;
 }
 
-
-//TODO: maybe write an alternate that uses polling on 1 or more
-//		completion channels using example on:
-//			https://linux.die.net/man/3/ibv_get_cq_event
-// notes section mentions amortizing acking WC events
-int retrieve_work_completion_events(struct ibv_comp_channel *cc, struct ibv_wc *wc, int max_wc)
+void rdma_send_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr)
 {
-	struct ibv_cq *cq_p = NULL;
-	void *ctx = NULL;
-	int ret = -1, total_wc = 0;
+	memset(sg, 0, sizeof(sg));
+	sg->addr = (uint64_t) mr->addr;
+	sg->length = (uint32_t)mr->length;
+	sg->lkey = (uint32_t)mr->lkey;
+	memset(wr, 0, sizeof(wr));
+	wr->sg_list = sg;
+	wr->num_sge = 1;
+	wr->opcode = IBV_WR_SEND;
+	wr->send_flags = IBV_SEND_SIGNALED;
+}
 
-	/* ack cq events regardless of status, important for cleanup later*/
-	ret = ibv_get_cq_event(cc, &cq_p, &ctx);
-	if(ret) {
-		if(cq_p) ibv_ack_cq_events(cq_p, 1);
+int rdma_post_send_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp)
+{
+	struct ibv_send_wr *bad_wr = NULL;
+	if(ibv_post_send(qp, wr, &bad_wr)) {
+		log_err("ibv_post_send() failed");
 		return -errno;
 	}
-	ibv_ack_cq_events(cq_p, 1);
-
-	ret = ibv_req_notify_cq(cq_p, 0);
-	if(ret) {
-		log_err("ibv_req_notify_cq() failed");
-		return -errno;
-	}
-
-	do {
-		ret = ibv_poll_cq(cq_p, max_wc-total_wc, wc + total_wc);
-		if(ret < 0) {
-			log_err("ibv_poll_cq() failed");
-			return -ret;
-		}
-		total_wc += ret;
-	} while(total_wc < max_wc);
-
-	ret = validate_wcs(wc, total_wc);
-	if(ret) return ret;
-	
-	return total_wc;
+	return 0;
 }
 
 /* poll on cq directly using timeout */
