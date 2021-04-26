@@ -28,13 +28,19 @@ find_package(PkgConfig)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.36.0)
 include_directories(${GLIB2_INCLUDE_DIRS})
 
-# add executables
+# write/recv setup
+add_executable(pears_server_w_rc ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_w_rc.c)
+add_executable(pears_client_w_rc ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_w_rc.c)
+
+# other setup
 add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c)
 add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client.c)
-
-
 #add_executable(bl_prog ${BL_SOURCE_DIR}/bl_prog.c)
 
 # add glib2 for it to be linked
+target_link_libraries(pears_server_w_rc ${GLIB2_LIBRARIES})
+target_link_libraries(pears_client_w_rc ${GLIB2_LIBRARIES})
+
+# other setup
 target_link_libraries(pears_server ${GLIB2_LIBRARIES})
 target_link_libraries(pears_client ${GLIB2_LIBRARIES})
