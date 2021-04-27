@@ -120,12 +120,12 @@ int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		return POLL_CLIENT_CONNECT_FAILED;
 	}
 
-	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
+	/*pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
 	ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
 	if(ret) {
 		log_err("failed to ACK cm event");
 		return -errno;
-	}
+	}*/
 
 	return POLL_CLIENT_CONNECT_ESTABLISHED;
 }
@@ -226,7 +226,8 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			}
 			/* wait for thread to complete, should have completed already though because of the EXIT request */
 			pthread_join(conns->threads[conn_i], NULL);
-			
+			/* clear out the cq if necessary*/
+			rdma_clear_cq(pc_conn->cq);
 			/* actually process the disconnect and reset the entry */
 			ret = process_disconnect_req(psc, pc_conn);
 			conns->active[conn_i] = 0;
@@ -354,7 +355,7 @@ void *worker(void *args)
 			}
 			break;
 		}
-		rdma_clear_cq(pcc->cq);
+		//rdma_clear_cq(pcc->cq);
 	}
 	return NULL;
 }
