@@ -93,7 +93,7 @@ int client(PEARS_CLT_CTX *pcc)
 	
 	//rdma_send_wr_prepare(pcc->send_wr, pcc->snd_sge, pcc->kvs_request_mr);
 	//rdma_post_send_reuse(pcc->send_wr, pcc->qp);
-	rdma_write_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
+	//rdma_write_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
 	rdma_write_imm_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
 
 	int count = 0;
@@ -139,13 +139,15 @@ int client(PEARS_CLT_CTX *pcc)
 	strcpy(pcc->kvs_request, "E");
 	/* post receive, we always expect a response */
 	ret = rdma_post_recv(pcc->response_mr, pcc->qp);
+	debug("writing exit to server\n");
 	if(ret) {
 		log_err("rdma_post_recv() failed");
 		return 1;
 	}
 
 	/* write to the server */
-	ret = rdma_write_c2s_non_block(pcc);
+	//ret = rdma_write_c2s_non_block(pcc);
+	ret = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
 	if(ret) {
 		log_err("rdma_write_c2s() failed");
 		return 1;
