@@ -42,7 +42,7 @@ enum REQUEST_TYPE {
  * sent 
  */
 #define MAX_KEY_SIZE (20)
-#define MAX_VAL_SIZE (180)
+#define MAX_VAL_SIZE (50)
 #define MAX_LINE_LEN (MAX_KEY_SIZE+MAX_VAL_SIZE)
 #define MAX_LINES (1)
 
