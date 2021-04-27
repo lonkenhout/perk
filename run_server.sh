@@ -23,7 +23,7 @@ exe=./bin/pears_server
 comp=""
 h=0
 addr_set=0
-possible_comps=["w_rc",""]
+possible_comps=["w_rc","wimm_rc",""]
 
 while true && [ $# -gt 1 ]; do
         #echo $1
@@ -57,7 +57,7 @@ while true && [ $# -gt 1 ]; do
 				# extract ip from local node configuration (expects it on ib0)
 				ip=`ifconfig ib0 | grep "inet " | awk '{print $2}'`
                         fi
-                        shift 2
+                        shift
                         ;;
                 -h|--help)
                         h=1
@@ -83,6 +83,7 @@ Options:
   -p, --port       server port
   -r, --rdma-comp  rdma composition, can be one of:
                    w_rc    - RDMA WRITE/RECV
+                   wimm_rc - RDMA WRITE with IMM/RECV
                    ...
   -n, --node       bind to local node (no argument)
   -h, --help       display help

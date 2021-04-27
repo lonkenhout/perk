@@ -24,7 +24,7 @@ infile=input.in
 exe=./bin/pears_client
 comp=""
 h=0
-possible_comps=["w_rc",""]
+possible_comps=["w_rc","wimm_rc",""]
 
 addr_set=0
 while true && [ $# -gt 1 ]; do
@@ -60,7 +60,7 @@ while true && [ $# -gt 1 ]; do
                         shift 2
                         ;;
 		-n|--node)
-			if [ $addr_set == 1]; then
+			if [ $addr_set == 1 ]; then
 				echo "address already set to $ip, redundant argument:"
                                 echo "$1 $2"
                         else
@@ -94,6 +94,7 @@ Options:
   -c, --count      maximum number of operations to perform
   -r, --rdma-comp  rdma composition, can be one of:
                    w_rc    - RDMA WRITE/RECV
+                   wimm_rc - RDMA WRITE with IMM/RECV
 		   ...
   -n, --node       DAS5 node where target is expected
   -h, --help       display help

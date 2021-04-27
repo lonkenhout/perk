@@ -32,6 +32,10 @@ include_directories(${GLIB2_INCLUDE_DIRS})
 add_executable(pears_server_w_rc ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_w_rc.c)
 add_executable(pears_client_w_rc ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_w_rc.c)
 
+# write_imm/recv setup
+add_executable(pears_server_wimm_rc ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_wimm_rc.c)
+add_executable(pears_client_wimm_rc ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_wimm_rc.c)
+
 # other setup
 add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c)
 add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client.c)
@@ -40,6 +44,9 @@ add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/r
 # add glib2 for it to be linked
 target_link_libraries(pears_server_w_rc ${GLIB2_LIBRARIES})
 target_link_libraries(pears_client_w_rc ${GLIB2_LIBRARIES})
+
+target_link_libraries(pears_server_wimm_rc ${GLIB2_LIBRARIES})
+target_link_libraries(pears_client_wimm_rc ${GLIB2_LIBRARIES})
 
 # other setup
 target_link_libraries(pears_server ${GLIB2_LIBRARIES})
