@@ -211,7 +211,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			}
 			/* wait for thread to complete, should have completed already though because of the EXIT request */
 			pthread_join(conns->threads[conn_i], NULL);
-			
+			rdma_clear_cq(pc_conn->cq);
 			/* actually process the disconnect and reset the entry */
 			ret = process_disconnect_req(psc, pc_conn);
 			conns->active[conn_i] = 0;
@@ -317,7 +317,6 @@ void *worker(void *args)
 			}
 			break;
 		}
-		rdma_clear_cq(pcc->cq);
 	}
 	return NULL;
 }
