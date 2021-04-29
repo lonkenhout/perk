@@ -23,7 +23,7 @@ exe=./bin/pears_server
 comp=""
 h=0
 addr_set=0
-possible_comps=["w_rc","wimm_rc",""]
+possible_comps=["w_sd","wimm_sd","sd_sd",""]
 
 while true && [ $# -gt 1 ]; do
         #echo $1

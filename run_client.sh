@@ -24,7 +24,7 @@ infile=input.in
 exe=./bin/pears_client
 comp=""
 h=0
-possible_comps=["w_rc","wimm_rc",""]
+possible_comps=["w_sd","wimm_sd","sd_sd",""]
 
 addr_set=0
 while true && [ $# -gt 1 ]; do
