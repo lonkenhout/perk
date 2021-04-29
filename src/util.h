@@ -21,6 +21,7 @@
 #include <rdma/rdma_cma.h>
 #include <infiniband/verbs.h>
 
+
 enum REQUEST_TYPE {
 	GET,
 	PUT,
