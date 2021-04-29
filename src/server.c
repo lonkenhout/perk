@@ -263,7 +263,7 @@ void *worker(void *args)
 	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
 
 	rdma_send_wr_prepare(&(pcc->send_wr), &(pcc->snd_sge), pcc->response_mr);
-
+	debug("worker starting polling\n");
 	while(1){
 		struct ibv_wc wc;
 		/* we expect the completion of write with IMM */
@@ -278,7 +278,7 @@ void *worker(void *args)
 			log_err("failed to ACK cm event");
 			return NULL;
 		}
-		char *buf = (char*)pcc->server_buf->addr;
+		char *buf = (char*)pcc->imm_data->addr;
 		res = parse_request(buf, 
 							k, MAX_KEY_SIZE, 
 							v, MAX_VAL_SIZE);

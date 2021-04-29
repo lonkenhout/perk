@@ -91,10 +91,10 @@ int client(PEARS_CLT_CTX *pcc)
 
 	rdma_recv_wr_prepare(&(pcc->recv_wr), &(pcc->rec_sge), pcc->response_mr);
 	
-	//rdma_send_wr_prepare(pcc->send_wr, pcc->snd_sge, pcc->kvs_request_mr);
-	//rdma_post_send_reuse(pcc->send_wr, pcc->qp);
+	rdma_send_wr_prepare(&(pcc->send_wr), &(pcc->snd_sge), pcc->kvs_request_mr);
+	//rdma_post_send_reuse(&(pcc->send_wr), pcc->qp);
 	//rdma_write_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
-	rdma_write_imm_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
+	//rdma_write_imm_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->kvs_request_mr, pcc->server_md_attr);
 
 	int count = 0;
 	/* do the same request max_reqs times */
@@ -110,25 +110,26 @@ int client(PEARS_CLT_CTX *pcc)
 
 		/* write to the server */
 		//ret = rdma_write_c2s_non_block(pcc);
-		ret = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
+		//ret = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
+		rdma_post_send_reuse(&(pcc->send_wr), pcc->qp);
 		if(ret) {
 			log_err("rdma_write_c2s() failed");
 			return 1;
 		}
 
-		ret = rdma_spin_cq(pcc->cq, &wc, 1);
-		if(ret != 1) {
+		ret = rdma_spin_cq(pcc->cq, &wc, 2);
+		if(ret != 2) {
 			log_err("rdma_poll_cq() failed");
 			exit(1);
 		}
 			
 		debug("Waiting for completion \n");
 
-		ret = rdma_spin_cq(pcc->cq, &wc, 1);
+		/*ret = rdma_spin_cq(pcc->cq, &wc, 1);
 		if(ret != 1) {
 			log_err("rdma_poll_cq() failed");
 			exit(1);
-		}
+		}*/
 		debug("%s:%s\n", pcc->kvs_request, pcc->response);
 
 		memset(pcc->response, 0, sizeof(pcc->response_mr->length));
@@ -147,7 +148,8 @@ int client(PEARS_CLT_CTX *pcc)
 
 	/* write to the server */
 	//ret = rdma_write_c2s_non_block(pcc);
-	ret = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
+	//ret = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
+	ret = rdma_post_send_reuse(&(pcc->send_wr), pcc->qp);
 	if(ret) {
 		log_err("rdma_write_c2s() failed");
 		return 1;
