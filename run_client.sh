@@ -24,7 +24,7 @@ infile=input.in
 exe=./bin/pears_client
 comp=""
 h=0
-possible_comps=["w_sd","wimm_sd","sd_sd",""]
+possible_comps=["w_sd","wimm_sd","sd_sd","mcd",""]
 
 addr_set=0
 while true && [ $# -gt 1 ]; do
@@ -36,6 +36,7 @@ while true && [ $# -gt 1 ]; do
 				echo "$1 $2"
 			else
 				ip=$2
+				addr_set=1
 			fi
 			shift 2
 			;;
@@ -56,6 +57,10 @@ while true && [ $# -gt 1 ]; do
 				echo "error: invalid RDMA composition: $2"
 				exit 1
 			fi
+			if [ "$2" == "mcd" ]; then
+				exe=./bin/client_mcd
+                                port=11211
+                        fi
 			comp=_$2
                         shift 2
                         ;;
@@ -65,6 +70,7 @@ while true && [ $# -gt 1 ]; do
                                 echo "$1 $2"
                         else
 				ip=10.149.0.$2
+				addr_set=1
 			fi
 			shift 2
                         ;;
@@ -102,4 +108,15 @@ Options:
 exit 0
 fi
 
-$exe$comp -a $ip -p $port -i $infile -c $count
+if [ "$comp" != "_mcd" ]; then
+	$exe$comp -a $ip -p $port -i $infile -c $count
+else
+        $exe -a $ip -p $port -i $infile -c $count
+
+        # find process id and make sure memcached is terminated after timeout T
+        #ps_list=`ps aux`
+        #ps_mcd=`echo "$ps_list" | grep "memcached" | awk 'FNR == 1 {print $2}'`
+        #if [ $T > 0 ]; then
+        #       (sleep $T; kill $ps_mcd) &
+        #fi
+fi
