@@ -263,13 +263,13 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return -ENOMEM;
 	}
 
-	/* prepost a recv for the clients potential write */
+	/* prepost a recv for write with IMM/send */
 	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
-        ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
-        if(ret) {
-                log_err("failed to ACK cm event");
-                return -errno;
-        }
+	ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
+	if(ret) {
+		log_err("failed to ACK cm event");
+		return -errno;
+	}
 
 	pc_conn->snd_sge.addr = (uint64_t) &(pc_conn->server_md_attr);
 	pc_conn->snd_sge.length = sizeof(pc_conn->server_md_attr);

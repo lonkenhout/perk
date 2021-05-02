@@ -40,6 +40,14 @@ typedef struct pears_server_context{
 	uint32_t			total_ops;
 } PEARS_SVR_CTX;
 
+enum RDMA_COMBINATION {
+	RDMA_COMBO_WR_SD,
+	RDMA_COMBO_WRIMM_SD,
+	RDMA_COMBO_SD_SD,
+	RDMA_COMBO_WR_WR,
+	RDMA_COMBO_WR_RD
+};
+
 typedef struct pears_client_context{
 	struct sockaddr_in			client_sa;
 	
@@ -52,7 +60,10 @@ typedef struct pears_client_context{
 	struct ibv_cq				*cq;
 	struct ibv_qp				*qp;
 	struct ibv_qp_init_attr 	qp_init_attr;
-	
+
+	/* type of rdma combo, this determines how the mr is registered */	
+	enum RDMA_COMBINATION		rdma_config;
+
 	/* local memory properties */
 	char						*kvs_request;
 	struct ibv_mr				*kvs_request_mr;
@@ -65,7 +76,18 @@ typedef struct pears_client_context{
 
 	char						*response;
 	struct ibv_mr				*response_mr;
-	/* request util */
+	
+	/* work request related stuff for request */
+	struct ibv_sge				request_sge;
+	struct ibv_send_wr			request_wr;
+
+	/* work request related stuff for response*/
+	struct ibv_sge				response_sge;
+	union{
+		struct ibv_recv_wr		rc_wr;
+		struct ibv_send_wr		rd_wr;
+	} response_wr;
+
 	struct ibv_sge				rec_sge;
 	struct ibv_sge				snd_sge;
 	struct ibv_sge				wr_sge;
