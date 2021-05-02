@@ -23,6 +23,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werr -O3 -Ofast -funroll-loops -m
 find_library(IBVERBS_LIBRARY ibverbs HINTS /home/lot230/local/lib)
 find_library(RDMACM_LIBRARY rdmacm HINTS /home/lot230/local/lib)
 
+
 link_libraries(pthread ${IBVERBS_LIBRARY} ${RDMACM_LIBRARY})
 
 # check for pkg config and add glib
@@ -30,10 +31,17 @@ find_package(PkgConfig)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.36.0)
 include_directories(${GLIB2_INCLUDE_DIRS})
 
-find_package(Libmemcached REQUIRED)
-include_directories(${LIBMEMCACHED_INCLUDE_DIRS})
-message(${LIBMEMCACHED_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${GLIB2_LIBRARIES} ${LIBMEMCACHED_LIBRARIES})
+pkg_check_modules(LIBMEMCACHED QUIET libmemcached>=1.0.18)
+if(!LIBMEMCACHED_FOUND)
+	message("Searching manually for libmemcached")
+	find_package(Libmemcached REQUIRED)
+	include_directories(${LIBMEMCACHED_INCLUDE_DIRS})
+	set(LIBS ${LIBS} ${GLIB2_LIBRARIES} ${LIBMEMCACHED_LIBRARIES})
+else()
+	include_directories(${LIBMEMCACHED_INCLUDE_DIRS})
+	set(LIBS ${LIBS} ${GLIB2_LIBRARIES} ${LIBMEMCACHED_LIBRARIES})
+endif()
+
 
 # write/recv setup
 add_executable(pears_server_w_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_w_sd.c)
