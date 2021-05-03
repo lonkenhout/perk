@@ -240,7 +240,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return ret;
 	}
 
-	/* receive information about buffer */
+	/* allocate WRITEable buffer based on received length */
 	printf("New buffer of length %u bytes requested\n", pc_conn->md_attr.length);
 	pc_conn->server_buf = rdma_buffer_alloc(pc_conn->pd,
 											pc_conn->md_attr.length,
@@ -250,10 +250,12 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return -ENOMEM;
 	}
 
+	/* setup the server_side memory attributes with create buffer */
 	pc_conn->server_md_attr.address = (uint64_t) pc_conn->server_buf->addr;
 	pc_conn->server_md_attr.length = (uint32_t) pc_conn->server_buf->length;
 	pc_conn->server_md_attr.stag.local_stag = (uint32_t) pc_conn->server_buf->lkey;
 
+	/* register the attributes structure as sendable memory */
 	pc_conn->server_md = rdma_buffer_register(pc_conn->pd,
 											  &(pc_conn->server_md_attr),
 											  sizeof(pc_conn->server_md_attr),
@@ -264,6 +266,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	}
 
 	/* prepost a recv for write with IMM/send */
+	//TODO: setup up better system to check if this is necessary
 	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
 	ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
 	if(ret) {
@@ -491,6 +494,7 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
 	rec_wr.num_sge = 1;
 	debug("pre posting recv\n");
 	print_curr_time();
+	/* post receive for memory attributes sent back by server */
 	ret = ibv_post_recv(pcc->qp, &rec_wr, &bad_rec_wr);
 	if(ret) {
 		log_err("ibv_post_recv() failed");
@@ -540,6 +544,7 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 	struct ibv_wc 		wc[2];
 	int ret = -1;
 	debug("Registering rdma buffers\n");
+	/* register request memory, this will be used for client->server */
 	pcc->kvs_request_mr = rdma_buffer_register(pcc->pd,
 											   pcc->kvs_request,
 											   MAX_LINE_LEN,
@@ -549,9 +554,23 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 		return -ENOMEM;
 	}
 
-	pcc->kvs_request_attr.address = (uint64_t) pcc->kvs_request_mr->addr;
-	pcc->kvs_request_attr.length = pcc->kvs_request_mr->length;
-	pcc->kvs_request_attr.stag.local_stag = pcc->kvs_request_mr->lkey;
+
+	/* register region for write from server->client */
+	pcc->response_mr = rdma_buffer_register(pcc->pd,
+										  pcc->response,
+										  MAX_LINE_LEN,
+										  PERM_R_RW);
+	if(!pcc->response_mr) {
+		log_err("rdma_buffer_register() failed");
+		return -ENOMEM;
+	}
+
+
+
+	/* store request memory in attribute to send to the server for registration */
+	pcc->kvs_request_attr.address = (uint64_t) pcc->response_mr->addr;
+	pcc->kvs_request_attr.length = pcc->response_mr->length;
+	pcc->kvs_request_attr.stag.local_stag = pcc->response_mr->lkey;
 	pcc->kvs_request_attr_mr = rdma_buffer_register(pcc->pd,
 													&(pcc->kvs_request_attr),
 													sizeof(pcc->kvs_request_attr),
@@ -570,6 +589,7 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 	snd_wr.opcode = IBV_WR_SEND;
 	snd_wr.send_flags = IBV_SEND_SIGNALED;
 
+	/* send the memory we will use for WRITEs to the server */
 	debug("Posting send\n");
 	print_curr_time();
 	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
@@ -586,86 +606,11 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 		return ret;
 	}
 
-	/* register region for remote read and write */
-	pcc->response_mr = rdma_buffer_register(pcc->pd,
-										  pcc->response,
-										  MAX_LINE_LEN,
-										  PERM_R_RW);
-	if(!pcc->response_mr) {
-		log_err("rdma_buffer_register() failed");
-		return -ENOMEM;
-	}
+	
+
+	//pcc->server_md_attr
 
 	debug("Server buffer location and credentials received\n");
-	return 0;
-}
-
-
-//TODO: generalize, rename
-int rdma_write_c2s(PEARS_CLT_CTX *pcc)
-{
-	struct ibv_send_wr 	snd_wr;
-	struct ibv_send_wr	*bad_snd_wr = NULL;
-	struct ibv_wc 		wc;
-	int 				ret = -1;
-
-	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
-	pcc->snd_sge.lkey = pcc->kvs_request_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_WRITE;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("ibv_post_send() failed");
-		return -errno;
-	}
-
-	ret = rdma_poll_cq(pcc->cq, &wc, 1, 100);
-	if(ret != 1) {
-		log_err("rdma_spin_cq() failed");
-		return ret;
-	}
-	debug("Buffer written to server\n");
-	return 0;
-}
-
-//TODO: generalize function to WRITE with MR and not struct
-int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc)
-{
-	struct ibv_send_wr 	snd_wr;
-	struct ibv_send_wr	*bad_snd_wr = NULL;
-	struct ibv_wc 		wc;
-	int 				ret = -1;
-
-	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
-	pcc->snd_sge.lkey = pcc->kvs_request_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_WRITE;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("ibv_post_send() failed");
-		return -errno;
-	}
-
-	ret = rdma_spin_cq(pcc->cq, &wc, 1);
-	if(ret != 1) {
-		log_err("rdma_spin_cq() failed");
-		return ret;
-	}
-	debug("Buffer written to server\n");
 	return 0;
 }
 
