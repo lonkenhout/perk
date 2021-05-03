@@ -116,19 +116,19 @@ int client(PEARS_CLT_CTX *pcc)
 			return 1;
 		}
 
-		ret = rdma_spin_cq(pcc->cq, &wc, 1);
-		if(ret != 1) {
+		ret = rdma_spin_cq(pcc->cq, &wc, 2);
+		if(ret != 2) {
 			log_err("rdma_poll_cq() failed");
 			exit(1);
 		}
 			
 		debug("Waiting for completion \n");
 
-		ret = rdma_spin_cq(pcc->cq, &wc, 1);
+		/*ret = rdma_spin_cq(pcc->cq, &wc, 1);
 		if(ret != 1) {
 			log_err("rdma_poll_cq() failed");
 			exit(1);
-		}
+		}*/
 		debug("%s:%s\n", pcc->kvs_request, pcc->response);
 
 		memset(pcc->response, 0, sizeof(pcc->response_mr->length));
