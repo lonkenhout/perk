@@ -241,7 +241,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	}
 
 	/* allocate WRITEable buffer based on received length */
-	printf("New buffer of length %u bytes requested\n", pc_conn->md_attr.length);
+	debug("New buffer of length %u bytes requested\n", pc_conn->md_attr.length);
 	pc_conn->server_buf = rdma_buffer_alloc(pc_conn->pd,
 											pc_conn->md_attr.length,
 											PERM_R_RW);
