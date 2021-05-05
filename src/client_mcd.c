@@ -8,10 +8,10 @@
 
 #define MAX_CONFIG_LEN (50)
 
-
 static FILE *f_ptr = NULL;
 static int using_file = 0;
 static int max_reqs = 1000000;
+
 static char *ip = NULL;
 static char *port = NULL;
 
