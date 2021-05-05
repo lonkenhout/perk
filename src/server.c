@@ -20,7 +20,7 @@ void print_usage(char *cmd){
 /* parse options */
 int parse_opts(int argc, char **argv){
 	int ret = 0, option;
-	while((option = getopt(argc, argv, "a:p:")) != -1){
+	while((option = getopt(argc, argv, "a:p:r:")) != -1){
 		switch(option){
 			case 'a':
 				ret = get_addr(optarg, (struct sockaddr*) &(psc->server_sa));
@@ -33,6 +33,31 @@ int parse_opts(int argc, char **argv){
 			case 'p':
 				psc->server_sa.sin_port = htons(strtol(optarg, NULL, 0));
 				debug("ip address set to %s\n", optarg);
+				break;
+			case 'r':
+				if(strncmp(optarg, "wr_sd", strlen("wr_sd")) == 0) {
+					printf("Using WRITE/SEND configuration");
+					client_rdma_config = RDMA_COMBO_WR;
+					server_rdma_config = RDMA_COMBO_SD;
+				} else if(strncmp(optarg, "wrimm_sd", strlen("wrimm_sd")) == 0) {
+					printf("using WRITE with IMM/SEND configuration\n");
+					client_rdma_config = RDMA_COMBO_WRIMM;
+					server_rdma_config = RDMA_COMBO_SD;
+				} else if(strncmp(optarg, "sd_sd", strlen("sd_sd")) == 0) {
+					printf("using SEND/SEND configuration\n");
+					client_rdma_config = RDMA_COMBO_SD;
+					server_rdma_config = RDMA_COMBO_SD;
+				} else if(strncmp(optarg, "wr_wr", strlen("wr_wr")) == 0) {
+					printf("using WRITE/WRITE configuration\n");
+					client_rdma_config = RDMA_COMBO_WR;
+					server_rdma_config = RDMA_COMBO_WR;
+				} else if(strncmp(optarg, "wr_rd", strlen("wr_rd")) == 0) {
+					printf("using WRITE/READ configuration\n");
+					client_rdma_config = RDMA_COMBO_WR;
+					server_rdma_config = RDMA_COMBO_RD;
+				} else {
+					fprintf(stderr, "Invalid configuration provided: %s\n", optarg);
+				}
 				break;
 			default:
 				print_usage(argv[0]);
@@ -193,7 +218,20 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
-			pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
+			if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_WR) {
+				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_wr, (void*) pc_conn);
+			} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_SD) {
+				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_sd, (void*) pc_conn);
+			} else if(client_rdma_config == RDMA_COMBO_SD && server_rdma_config == RDMA_COMBO_SD) {
+				pthread_create(&(conns->threads[conn_i]), NULL, worker_sd_sd, (void*) pc_conn);
+			} else if(client_rdma_config == RDMA_COMBO_WRIMM && server_rdma_config == RDMA_COMBO_SD) {
+				pthread_create(&(conns->threads[conn_i]), NULL, worker_wrimm_sd, (void*) pc_conn);
+			} else {
+				fprintf(stderr, "error: unknown rdma combination\n");
+				exit(1);
+			}
+
+
 			if(ret == POLL_CLIENT_CONNECT_ESTABLISHED) {
 				conns->established[conn_i] = 1;
 			} else {
