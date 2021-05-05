@@ -22,9 +22,9 @@ port=20838
 count=5000000
 infile=input.in
 exe=./bin/pears_client
-comp=""
+comp="wr_wr"
 h=0
-possible_comps=["w_sd","wimm_sd","sd_sd","mcd",""]
+possible_comps=["wr_sd","wrimm_sd","sd_sd","mcd","wr_wr"]
 
 addr_set=0
 while true && [ $# -gt 1 ]; do
@@ -46,12 +46,10 @@ while true && [ $# -gt 1 ]; do
 			;;
 		-i|--infile)
 			infile=$2
-                        shift 2
-                        ;;
+			shift 2 ;;
 		-c|--count)
 			count=$2
-                        shift 2
-                        ;;
+			shift 2 ;;
 		-r|--rdma-comp)
 			if [[ ! "${possible_comps[@]}" =~ "$2" ]]; then
 				echo "error: invalid RDMA composition: $2"
@@ -59,16 +57,16 @@ while true && [ $# -gt 1 ]; do
 			fi
 			if [ "$2" == "mcd" ]; then
 				exe=./bin/client_mcd
-                                port=11211
-                        fi
-			comp=_$2
+				port=11211
+			fi
+			comp=$2
                         shift 2
                         ;;
 		-n|--node)
 			if [ $addr_set == 1 ]; then
 				echo "address already set to $ip, redundant argument:"
-                                echo "$1 $2"
-                        else
+				echo "$1 $2"
+			else
 				ip=10.149.0.$2
 				addr_set=1
 			fi
@@ -99,8 +97,10 @@ Options:
   -i, --infile     input file containing key-value pairs
   -c, --count      maximum number of operations to perform
   -r, --rdma-comp  rdma composition, can be one of:
-                   w_rc    - RDMA WRITE/RECV
-                   wimm_rc - RDMA WRITE with IMM/RECV
+                   wr_sd    - RDMA WRITE/SEND
+                   sd_sd    - SEND/SEND
+                   wimm_sd  - RDMA WRITE with IMM/SEND
+				   wr_wr    - RDMA WRITE/WRITE
 		   ...
   -n, --node       DAS5 node where target is expected
   -h, --help       display help
@@ -108,8 +108,8 @@ Options:
 exit 0
 fi
 
-if [ "$comp" != "_mcd" ]; then
-	$exe$comp -a $ip -p $port -i $infile -c $count
+if [ "$comp" != "mcd" ]; then
+	$exe -r $comp -a $ip -p $port -i $infile -c $count
 else
         $exe -a $ip -p $port -i $infile -c $count
 

@@ -20,10 +20,10 @@ eval set -- "$PARSED"
 ip=0.0.0.0
 port=20838
 exe=./bin/pears_server
-comp=""
+comp="wr_wr"
 h=0
 addr_set=0
-possible_comps=["w_sd","wimm_sd","sd_sd","mcd",""]
+possible_comps=["wr_sd","wrimm_sd","sd_sd","wr_wr","mcd"]
 T=0
 max_threads=4
 
@@ -53,7 +53,7 @@ while true && [ $# -gt 1 ]; do
 				ip=`ifconfig ib0 | grep "inet " | awk '{print $2}'`
 				port=11211
 			fi
-                        comp=_$2
+                        comp=$2
                         shift 2
                         ;;
 		-t|--timeout)
@@ -104,8 +104,8 @@ Options:
 "
 exit 0
 fi
-if [ "$comp" != "_mcd" ]; then
-	$exe$comp -a $ip -p $port
+if [ "$comp" != "mcd" ]; then
+	$exe -r $comp -a $ip -p $port
 else
 	echo "Starting memcached on $ip:$port on behalf of $USER with $max_threads threads"
 	memcached -u $USER -l $ip -p $port -t $max_threads
