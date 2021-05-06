@@ -76,7 +76,11 @@ typedef struct pears_client_context{
 
 	char						*response;
 	struct ibv_mr				*response_mr;
-	
+
+	/* extra memory for read requests */
+	struct rdma_buffer_attr		server_rd_md_attr;
+	struct ibv_mr				*server_rd_md_mr;
+
 	/* work request related stuff for request */
 	struct ibv_sge				request_sge;
 	struct ibv_send_wr			request_wr;
@@ -122,6 +126,9 @@ typedef struct pears_client_conn{
 	struct ibv_mr				*server_buf;
 	struct ibv_mr				*server_md;
 	struct rdma_buffer_attr		server_md_attr;
+	
+	struct rdma_buffer_attr		server_rd_md_attr;
+	struct ibv_mr				*server_rd_md_mr;
 
 	struct ibv_mr				*response_mr;
 	struct ibv_mr				*imm_data;
@@ -197,6 +204,7 @@ int rdma_post_send_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp);
 
 void rdma_write_imm_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
 void rdma_write_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
+void rdma_read_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
 int rdma_post_write_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp);
 
 int rdma_clear_cq(struct ibv_cq *cq);

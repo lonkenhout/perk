@@ -9,5 +9,6 @@ void *worker_wr_sd(void *args);
 void *worker_wrimm_sd(void *args);
 void *worker_sd_sd(void *args);
 void *worker_wr_wr(void *args);
+void *worker_wr_rd(void *args);
 
 #endif

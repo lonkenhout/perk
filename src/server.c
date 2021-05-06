@@ -226,6 +226,8 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_sd_sd, (void*) pc_conn);
 			} else if(client_rdma_config == RDMA_COMBO_WRIMM && server_rdma_config == RDMA_COMBO_SD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wrimm_sd, (void*) pc_conn);
+			} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_RD) {
+				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_rd, (void*) pc_conn);
 			} else {
 				fprintf(stderr, "error: unknown rdma combination\n");
 				exit(1);

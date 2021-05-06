@@ -165,6 +165,9 @@ int main(int argc, char **argv){
 	} else if(client_rdma_config == RDMA_COMBO_WRIMM && server_rdma_config == RDMA_COMBO_SD) {
 		printf("starting wrimm_sd config\n");
 		ret = client_wrimm_sd(pcc);
+	} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_RD) {
+		printf("starting wr_rd config\n");
+		ret = client_wr_rd(pcc);
 	} else {
 		fprintf(stderr, "error: unknown rdma combination\n");
 		exit(1);

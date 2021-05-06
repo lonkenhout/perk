@@ -413,3 +413,63 @@ void *worker_wr_wr(void *args)
 	return NULL;
 }
 
+void *worker_wr_rd(void *args)
+{
+	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
+	int res, sem_val = 0;
+	char k[MAX_LINE_LEN] = {0,};
+	char v[MAX_LINE_LEN] = {0,};
+	memset(k, 0, sizeof(k));
+	memset(v, 0, sizeof(v));
+
+	struct timeval s, e;
+
+	rdma_write_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->response_mr, pcc->md_attr);
+
+	while(1){
+		char *buf = (char*)pcc->server_buf->addr;
+		res = parse_request(buf, 
+							k, MAX_KEY_SIZE, 
+							v, MAX_VAL_SIZE);
+		if(res == GET) {
+			debug("Get request received: {%s}\n", k);
+			struct ibv_wc wc;
+			/* get request */
+			char *val = pears_kv_get(k);
+			if(val == NULL) {
+				val = "EMPTY";
+			}
+
+			/* clean up and set the response, then continue as normal */
+			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
+			strcpy(buf, "R:");
+			strcat(buf, val);
+			debug("set result to %s\n", buf);
+			//strcpy((char*)pcc->response_mr->addr, val);
+			debug("Set response, now leaving\n");
+			pcc->ops++;
+		} else if(res == PUT) {
+			debug("Put request received: {%s:%s}\n", k, v);
+			struct ibv_wc wc;
+			/* put request */
+			pears_kv_insert(k, v);
+			
+			/* cleanup and send response */
+			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
+			//strcpy((char*)pcc->response_mr->addr, "INSERTED");
+			strcpy(buf, "R:INSERTED");
+			debug("Set response, now leaving\n");
+			pcc->ops++;
+
+		} else if(res == EXIT) {
+			struct ibv_wc wc;
+			//strcpy((char*)pcc->response_mr->addr, "OK");
+			strcpy(buf, "OK");
+			/*wait a little bit so the client can read the response, then break and exit */
+			usleep(1000);	
+			break;
+		}
+	}
+	return NULL;
+}
+

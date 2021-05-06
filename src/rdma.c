@@ -291,9 +291,25 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return -errno;
 	}
 
+	/* setup attributes to send to client*/
+	pc_conn->server_rd_md_attr.address = (uint64_t)pc_conn->response_mr->addr;
+	pc_conn->server_rd_md_attr.length = pc_conn->response_mr->length;
+	pc_conn->server_rd_md_attr.stag.local_stag = pc_conn->response_mr->lkey;
+	pc_conn->server_rd_md_mr = rdma_buffer_register(pc_conn->pd,
+													&(pc_conn->server_rd_md_attr),
+													sizeof(pc_conn->server_rd_md_attr),
+													PERM_L_RW);
+	if(!pc_conn->server_rd_md_mr) {
+			log_err("rdma_buffer_register() failed");
+			        return -ENOMEM;
+	}
+	/* and send that one as well */
+	ret = rdma_post_send(pc_conn->server_rd_md_mr, pc_conn->qp);
+	if(ret) return ret;
+
 	print_curr_time();
-	ret = rdma_poll_cq(pc_conn->cq, &wc, 1, 100);
-	if(ret != 1) {
+	ret = rdma_poll_cq(pc_conn->cq, &wc, 2, 100);
+	if(ret != 2) {
 		log_err("process_work_completion_events() failed");
 		return ret;
 	}
@@ -327,6 +343,7 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	rdma_buffer_free(pc_conn->imm_data);
 	rdma_buffer_deregister(pc_conn->md);
 	rdma_buffer_deregister(pc_conn->server_md);
+	rdma_buffer_deregister(pc_conn->server_rd_md_mr);
 	
 
 	ret = ibv_dealloc_pd(pc_conn->pd);
@@ -500,6 +517,21 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
 		log_err("ibv_post_recv() failed");
 		return ret;
 	}
+
+	/* setup memory to store READable memory */
+	pcc->server_rd_md_mr = rdma_buffer_register(pcc->pd,
+												&(pcc->server_rd_md_attr),
+												sizeof(pcc->server_rd_md_attr),
+												PERM_L_RW);
+	if(!pcc->server_rd_md_mr) {
+		log_err("rdma_buffer_register() failed");
+		return -ENOMEM;
+	}
+
+	ret = rdma_post_recv(pcc->server_rd_md_mr, pcc->qp);
+	if(ret) return ret;
+
+
 	debug("Pre posted a recv work request\n");
 	return 0;
 }
@@ -600,8 +632,8 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 
 	debug("Waiting for completion of recv and send\n");
 
-	ret = rdma_poll_cq(pcc->cq, wc, 2, 100);
-	if(ret != 2) {
+	ret = rdma_poll_cq(pcc->cq, wc, 3, 100);
+	if(ret != 3) {
 		log_err("rdma_poll_cq() failed");
 		return ret;
 	}
@@ -655,6 +687,7 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
 	rdma_buffer_deregister(pcc->kvs_request_attr_mr);
 	rdma_buffer_deregister(pcc->kvs_request_mr);
 	rdma_buffer_deregister(pcc->response_mr);
+	rdma_buffer_deregister(pcc->server_rd_md_mr);
 
 	ret = ibv_dealloc_pd(pcc->pd);
 	if(ret) {
@@ -680,6 +713,21 @@ void rdma_write_wr_prepare(struct ibv_send_wr *wr,
 	wr->sg_list = sg;
 	wr->num_sge = 1;
 	wr->opcode = IBV_WR_RDMA_WRITE;
+	wr->send_flags = IBV_SEND_SIGNALED;
+	wr->wr.rdma.rkey = r_attr.stag.remote_stag;
+	wr->wr.rdma.remote_addr = r_attr.address;
+}
+
+void rdma_read_wr_prepare(struct ibv_send_wr *wr, 
+	struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr)
+{
+	sg->addr = (uint64_t) mr->addr;
+	sg->length = (uint32_t) mr->length;
+	sg->lkey = mr->lkey;
+	bzero(wr, sizeof(*wr));
+	wr->sg_list = sg;
+	wr->num_sge = 1;
+	wr->opcode = IBV_WR_RDMA_READ;
 	wr->send_flags = IBV_SEND_SIGNALED;
 	wr->wr.rdma.rkey = r_attr.stag.remote_stag;
 	wr->wr.rdma.remote_addr = r_attr.address;
