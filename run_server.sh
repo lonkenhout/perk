@@ -23,7 +23,7 @@ exe=./bin/pears_server
 comp="wr_wr"
 h=0
 addr_set=0
-possible_comps=["wr_sd","wrimm_sd","sd_sd","wr_wr","mcd"]
+possible_comps=["wr_sd","wrimm_sd","sd_sd","wr_wr","wr_rd","mcd"]
 T=0
 max_threads=4
 
