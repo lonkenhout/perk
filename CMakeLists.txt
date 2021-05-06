@@ -31,6 +31,7 @@ find_package(PkgConfig)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.36.0)
 include_directories(${GLIB2_INCLUDE_DIRS})
 
+# check for libmemcached manually and add glib and libmemcached libraries to used libs
 pkg_check_modules(LIBMEMCACHED QUIET libmemcached>=1.0.18)
 if(NOT LIBMEMCACHED_FOUND)
 	message("-- Searching manually for libmemcached")
@@ -44,33 +45,12 @@ else()
 endif()
 
 
-# write/recv setup
-#add_executable(pears_server_w_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_w_sd.c)
-#add_executable(pears_client_w_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_w_sd.c)
-
-# write_imm/recv setup
-#add_executable(pears_server_wimm_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_wimm_sd.c)
-#add_executable(pears_client_wimm_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_wimm_sd.c)
-
-# send/send setup
-#add_executable(pears_server_sd_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_sd_sd.c)
-#add_executable(pears_client_sd_sd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_sd_sd.c)
-
 # setup thats runs all other setups
 add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c ${PROJECT_SOURCE_DIR}/workers.c)
 add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client.c ${PROJECT_SOURCE_DIR}/clients.c)
 
+# client that can connect to memcached server
 add_executable(client_mcd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/client_mcd.c)
-
-# add glib2 for it to be linked
-#target_link_libraries(pears_server_w_sd ${LIBS})
-#target_link_libraries(pears_client_w_sd ${LIBS})
-
-#target_link_libraries(pears_server_sd_sd ${LIBS})
-#target_link_libraries(pears_client_sd_sd ${LIBS})
-
-#target_link_libraries(pears_server_wimm_sd ${LIBS})
-#target_link_libraries(pears_client_wimm_sd ${LIBS})
 
 # other setup
 target_link_libraries(pears_server ${LIBS})
