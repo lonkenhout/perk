@@ -17,7 +17,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # setup flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werr -O3 -Ofast -funroll-loops -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werr -O3 -Ofast -ffast-math -Og -ggdb -funroll-loops -march=native")
 
 # find and link libs
 find_library(IBVERBS_LIBRARY ibverbs HINTS /home/lot230/local/lib)
@@ -44,10 +44,22 @@ else()
 	set(LIBS ${LIBS} ${GLIB2_LIBRARIES} ${LIBMEMCACHED_LIBRARIES})
 endif()
 
+if(${DEB})
+	message("Setting up debugging definitions")
+	add_definitions( -DPEARS_DEBUG=1 )
+endif()
+if(${BM_CLIENT_LAT})
+	message("Setting up client side latency benchmarking definitions")
+	add_definitions( -DBM_CLIENT_LATENCY=1 )
+endif()
 
 # setup thats runs all other setups
 add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c ${PROJECT_SOURCE_DIR}/workers.c)
 add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client.c ${PROJECT_SOURCE_DIR}/clients.c)
+
+add_executable(pears_server_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_bm.c ${PROJECT_SOURCE_DIR}/workers_bm.c)
+add_executable(pears_client_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_bm.c ${PROJECT_SOURCE_DIR}/clients_bm.c)
+
 
 # client that can connect to memcached server
 add_executable(client_mcd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/client_mcd.c)
@@ -55,6 +67,10 @@ add_executable(client_mcd ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/cli
 # other setup
 target_link_libraries(pears_server ${LIBS})
 target_link_libraries(pears_client ${LIBS})
+
+# benchmarking setup
+target_link_libraries(pears_server_bm ${LIBS})
+target_link_libraries(pears_client_bm ${LIBS})
 
 # memcached client
 target_link_libraries(client_mcd ${LIBS})
