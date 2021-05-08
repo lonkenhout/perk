@@ -8,8 +8,8 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
     exit 1
 fi
 
-OPTIONS="a:p:i:c:r:n:h"
-LONGOPTS="addr:,port:,infile:,count:,rdma-comp:,node:,help"
+OPTIONS="a:p:i:c:r:n:bh"
+LONGOPTS="addr:,port:,infile:,count:,rdma-comp:,node:,benchmark,help"
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -38,12 +38,10 @@ while true && [ $# -gt 1 ]; do
 				ip=$2
 				addr_set=1
 			fi
-			shift 2
-			;;
+			shift 2 ;;
 		-p|--port)
 			port=$2
-			shift 2
-			;;
+			shift 2 ;;
 		-i|--infile)
 			infile=$2
 			shift 2 ;;
@@ -60,8 +58,7 @@ while true && [ $# -gt 1 ]; do
 				port=11211
 			fi
 			comp=$2
-                        shift 2
-                        ;;
+			shift 2 ;;
 		-n|--node)
 			if [ $addr_set == 1 ]; then
 				echo "address already set to $ip, redundant argument:"
@@ -70,16 +67,16 @@ while true && [ $# -gt 1 ]; do
 				ip=10.149.0.$2
 				addr_set=1
 			fi
-			shift 2
-                        ;;
+			shift 2 ;;
+		-b|--benchmark)
+			exe=./bin/pears_client_bm
+			shift ;;
 		-h|--help)
 			h=1
-                        shift
-			break
-                        ;;
-		--)
 			shift
-			;;
+			break ;;
+		--)
+			shift ;;
 		*)
 			echo "error parsing arguments"
 			exit 1
@@ -92,31 +89,24 @@ then
 	echo "Usage: $cmd [OPTIONS]..
 
 Options:
-  -a, --addr       server IP address
-  -p, --port       server port
-  -i, --infile     input file containing key-value pairs
-  -c, --count      maximum number of operations to perform
-  -r, --rdma-comp  rdma composition, can be one of:
-                   wr_sd    - RDMA WRITE/SEND
-                   sd_sd    - SEND/SEND
-                   wimm_sd  - RDMA WRITE with IMM/SEND
-				   wr_wr    - RDMA WRITE/WRITE
-		   ...
-  -n, --node       DAS5 node where target is expected
-  -h, --help       display help
+  -a, --addr=<IP>         server IP address (default: 0.0.0.0)
+  -p, --port=<PORT>       server port (default: 20838)
+  -i, --infile=<IN>       input file containing key-value pairs
+  -c, --count=<MAX>       maximum number of operations to perform (default: 5000000)
+  -r, --rdma-comp=<COMP>  rdma composition, can be one of: (default: wr_wr)
+                          wr_sd    - send request using WRITE, send response using SEND
+                          sd_sd    - send request using SEND, send response using SEND
+                          wimm_sd  - send request using WRITE with immediate data, send response using SEND
+                          wr_wr    - send request using WRITE, send back response using WRITE
+                          wr_rd    - send request using WRITE, READ response from server
+  -n, --node=<NODENUM>    DAS5 node where target is expected, will replace default IP with 10.149.0.NODENUM
+  -h, --help              display help
 "
 exit 0
 fi
 
 if [ "$comp" != "mcd" ]; then
-	$exe -r $comp -a $ip -p $port -i $infile -c $count
+	${exe} -r $comp -a $ip -p $port -i $infile -c $count
 else
-        $exe -a $ip -p $port -i $infile -c $count
-
-        # find process id and make sure memcached is terminated after timeout T
-        #ps_list=`ps aux`
-        #ps_mcd=`echo "$ps_list" | grep "memcached" | awk 'FNR == 1 {print $2}'`
-        #if [ $T > 0 ]; then
-        #       (sleep $T; kill $ps_mcd) &
-        #fi
+	$exe -a $ip -p $port -i $infile -c $count
 fi
