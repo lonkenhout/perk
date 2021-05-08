@@ -57,8 +57,8 @@ endif()
 add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c ${PROJECT_SOURCE_DIR}/workers.c)
 add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client.c ${PROJECT_SOURCE_DIR}/clients.c)
 
-add_executable(pears_server_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_bm.c ${PROJECT_SOURCE_DIR}/workers_bm.c)
-add_executable(pears_client_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_bm.c ${PROJECT_SOURCE_DIR}/clients_bm.c)
+#add_executable(pears_server_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_bm.c ${PROJECT_SOURCE_DIR}/workers_bm.c)
+#add_executable(pears_client_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client_bm.c ${PROJECT_SOURCE_DIR}/clients_bm.c)
 
 
 # client that can connect to memcached server
@@ -69,8 +69,8 @@ target_link_libraries(pears_server ${LIBS})
 target_link_libraries(pears_client ${LIBS})
 
 # benchmarking setup
-target_link_libraries(pears_server_bm ${LIBS})
-target_link_libraries(pears_client_bm ${LIBS})
+#target_link_libraries(pears_server_bm ${LIBS})
+#target_link_libraries(pears_client_bm ${LIBS})
 
 # memcached client
 target_link_libraries(client_mcd ${LIBS})
