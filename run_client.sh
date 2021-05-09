@@ -20,7 +20,7 @@ eval set -- "$PARSED"
 ip=127.0.0.1
 port=20838
 count=5000000
-infile=input.in
+infile="none"
 exe=./bin/pears_client
 comp="wr_wr"
 h=0
@@ -47,6 +47,7 @@ while true && [ $# -gt 1 ]; do
 			shift 2 ;;
 		-c|--count)
 			count=$2
+			echo "$count"
 			shift 2 ;;
 		-r|--rdma-comp)
 			if [[ ! "${possible_comps[@]}" =~ "$2" ]]; then
@@ -106,7 +107,7 @@ exit 0
 fi
 
 if [ "$comp" != "mcd" ]; then
-	${exe} -r $comp -a $ip -p $port -i $infile -c $count
+	$exe -r $comp -a $ip -p $port -i $infile -c $count
 else
 	$exe -a $ip -p $port -i $infile -c $count
 fi
