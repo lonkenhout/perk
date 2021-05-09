@@ -37,24 +37,24 @@ int parse_opts(int argc, char **argv){
 			case 'r':
 				if(strncmp(optarg, "wr_sd", strlen("wr_sd")) == 0) {
 					printf("Using WRITE/SEND configuration");
-					client_rdma_config = RDMA_COMBO_WR;
-					server_rdma_config = RDMA_COMBO_SD;
+					psc->config.client = RDMA_COMBO_WR;
+					psc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "wrimm_sd", strlen("wrimm_sd")) == 0) {
 					printf("using WRITE with IMM/SEND configuration\n");
-					client_rdma_config = RDMA_COMBO_WRIMM;
-					server_rdma_config = RDMA_COMBO_SD;
+					psc->config.client = RDMA_COMBO_WRIMM;
+					psc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "sd_sd", strlen("sd_sd")) == 0) {
 					printf("using SEND/SEND configuration\n");
-					client_rdma_config = RDMA_COMBO_SD;
-					server_rdma_config = RDMA_COMBO_SD;
+					psc->config.client = RDMA_COMBO_SD;
+					psc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "wr_wr", strlen("wr_wr")) == 0) {
 					printf("using WRITE/WRITE configuration\n");
-					client_rdma_config = RDMA_COMBO_WR;
-					server_rdma_config = RDMA_COMBO_WR;
+					psc->config.client = RDMA_COMBO_WR;
+					psc->config.server = RDMA_COMBO_WR;
 				} else if(strncmp(optarg, "wr_rd", strlen("wr_rd")) == 0) {
 					printf("using WRITE/READ configuration\n");
-					client_rdma_config = RDMA_COMBO_WR;
-					server_rdma_config = RDMA_COMBO_RD;
+					psc->config.client = RDMA_COMBO_WR;
+					psc->config.server = RDMA_COMBO_RD;
 				} else {
 					fprintf(stderr, "Invalid configuration provided: %s\n", optarg);
 				}
@@ -79,7 +79,9 @@ void pears_kv_init()
 
 void pears_kv_destroy()
 {
+	pthread_mutex_lock(&put_mutex);
 	g_hash_table_destroy(ght);
+	pthread_mutex_unlock(&put_mutex);
 }
 
 void pears_kv_insert(void *key, void *val)
@@ -194,6 +196,8 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			conn_i = client_coll_find_free(conns);
 			pc_conn = &(conns->clients[conn_i]);
 			pc_conn->cm_cid = tmp_id;
+			pc_conn->config.client = psc->config.client;
+			pc_conn->config.server = psc->config.server;
 			ret = process_connect_req(psc, pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
 				conns->active[conn_i] = 1;
@@ -215,18 +219,17 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			conn_i = client_coll_find_conn(conns, src);
 			debug("finalizing connection at entry %d\n", conn_i);
 			pc_conn = &(conns->clients[conn_i]);
-
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
-			if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_WR) {
+			if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_WR) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_wr, (void*) pc_conn);
-			} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_SD) {
+			} else if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_SD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_sd, (void*) pc_conn);
-			} else if(client_rdma_config == RDMA_COMBO_SD && server_rdma_config == RDMA_COMBO_SD) {
+			} else if(psc->config.client == RDMA_COMBO_SD && psc->config.server == RDMA_COMBO_SD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_sd_sd, (void*) pc_conn);
-			} else if(client_rdma_config == RDMA_COMBO_WRIMM && server_rdma_config == RDMA_COMBO_SD) {
+			} else if(psc->config.client == RDMA_COMBO_WRIMM && psc->config.server == RDMA_COMBO_SD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wrimm_sd, (void*) pc_conn);
-			} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_RD) {
+			} else if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_RD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_rd, (void*) pc_conn);
 			} else {
 				fprintf(stderr, "error: unknown rdma combination\n");
@@ -415,8 +418,8 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 						printf("== processed %d requests in %.0f ms\n",
 								psc->total_ops, time);
 						printf("== ops/s: %.1f\n", psc->total_ops/(time/1000));
-						psc->total_ops = 0;
 
+						psc->total_ops = 0;
 					}
 					debug("disconnect processed successfully\n");
 				} else if(res == POLL_CLIENT_CONNECT_ESTABLISHED){

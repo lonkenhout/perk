@@ -189,7 +189,7 @@ int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	pc_conn->rec_sge.length = pc_conn->md->length;
 	pc_conn->rec_sge.lkey = pc_conn->md->lkey;
 
-	bzero(&recv_wr, sizeof(recv_wr));
+	memset(&recv_wr, 0, sizeof(recv_wr));
 	recv_wr.sg_list = &(pc_conn->rec_sge);
 	recv_wr.num_sge = 1;
 	debug("posting recv\n");
@@ -250,16 +250,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return -ENOMEM;
 	}
 
-	/* setup the server_side memory attributes with create buffer */
-	pc_conn->server_md_attr.address = (uint64_t) pc_conn->server_buf->addr;
-	pc_conn->server_md_attr.length = (uint32_t) pc_conn->server_buf->length;
-	pc_conn->server_md_attr.stag.local_stag = (uint32_t) pc_conn->server_buf->lkey;
-
-	/* register the attributes structure as sendable memory */
-	pc_conn->server_md = rdma_buffer_register(pc_conn->pd,
-											  &(pc_conn->server_md_attr),
-											  sizeof(pc_conn->server_md_attr),
-											  PERM_L_RW);
+	pc_conn->server_md = setup_md_attr(pc_conn->pd, &(pc_conn->server_md_attr), pc_conn->server_buf);
 	if(!pc_conn->server_md) {
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
@@ -268,11 +259,26 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	/* prepost a recv for write with IMM/send */
 	//TODO: setup up better system to check if this is necessary
 	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
-	ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
-	if(ret) {
-		log_err("failed to ACK cm event");
+	if(pc_conn->config.client == RDMA_COMBO_WRIMM){
+		ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
+		if(ret) {
+			log_err("failed to ACK cm event");
+			return -errno;
+		}
+	}
+
+	pc_conn->sd_request_mr = rdma_buffer_register(pc_conn->pd, &(pc_conn->sd_request), sizeof(pc_conn->sd_request), PERM_L_RW);
+	if(!pc_conn->sd_request_mr) {
+		log_err("ionfnonfoianeoidfna");
 		return -errno;
 	}
+	rdma_recv_wr_prepare(&(pc_conn->recv_wr), &(pc_conn->rec_sge), pc_conn->sd_request_mr);
+	ret = rdma_post_recv_reuse(&(pc_conn->recv_wr), pc_conn->qp);
+	if(ret) {
+		log_err("rdma_post_recv() failed");
+		return 1;
+	}
+
 
 	pc_conn->snd_sge.addr = (uint64_t) &(pc_conn->server_md_attr);
 	pc_conn->snd_sge.length = sizeof(pc_conn->server_md_attr);
@@ -292,13 +298,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	}
 
 	/* setup attributes to send to client*/
-	pc_conn->server_rd_md_attr.address = (uint64_t)pc_conn->response_mr->addr;
-	pc_conn->server_rd_md_attr.length = pc_conn->response_mr->length;
-	pc_conn->server_rd_md_attr.stag.local_stag = pc_conn->response_mr->lkey;
-	pc_conn->server_rd_md_mr = rdma_buffer_register(pc_conn->pd,
-													&(pc_conn->server_rd_md_attr),
-													sizeof(pc_conn->server_rd_md_attr),
-													PERM_L_RW);
+	pc_conn->server_rd_md_mr = setup_md_attr(pc_conn->pd, &(pc_conn->server_rd_md_attr), pc_conn->response_mr);
 	if(!pc_conn->server_rd_md_mr) {
 			log_err("rdma_buffer_register() failed");
 			        return -ENOMEM;
@@ -344,7 +344,10 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	rdma_buffer_deregister(pc_conn->md);
 	rdma_buffer_deregister(pc_conn->server_md);
 	rdma_buffer_deregister(pc_conn->server_rd_md_mr);
-	
+	if(pc_conn->sd_response_mr != NULL) {
+		rdma_buffer_deregister(pc_conn->sd_response_mr);
+	}
+	rdma_buffer_deregister(pc_conn->sd_request_mr);
 
 	ret = ibv_dealloc_pd(pc_conn->pd);
 	if(ret) {
@@ -503,12 +506,13 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
 		return -ENOMEM;
 	}
 
-	pcc->rec_sge.addr = (uint64_t) pcc->server_md_mr->addr;
+	/*pcc->rec_sge.addr = (uint64_t) pcc->server_md_mr->addr;
 	pcc->rec_sge.length = (uint32_t) pcc->server_md_mr->length;
 	pcc->rec_sge.lkey = (uint32_t) pcc->server_md_mr->lkey;
 	bzero(&(rec_wr), sizeof(rec_wr));
 	rec_wr.sg_list = &(pcc->rec_sge);
-	rec_wr.num_sge = 1;
+	rec_wr.num_sge = 1;*/
+	rdma_recv_wr_prepare(&rec_wr, &(pcc->rec_sge), pcc->server_md_mr);
 	debug("pre posting recv\n");
 	print_curr_time();
 	/* post receive for memory attributes sent back by server */
@@ -600,26 +604,13 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 
 
 	/* store request memory in attribute to send to the server for registration */
-	pcc->kvs_request_attr.address = (uint64_t) pcc->response_mr->addr;
-	pcc->kvs_request_attr.length = pcc->response_mr->length;
-	pcc->kvs_request_attr.stag.local_stag = pcc->response_mr->lkey;
-	pcc->kvs_request_attr_mr = rdma_buffer_register(pcc->pd,
-													&(pcc->kvs_request_attr),
-													sizeof(pcc->kvs_request_attr),
-													PERM_L_RW);
+	pcc->kvs_request_attr_mr = setup_md_attr(pcc->pd, &(pcc->kvs_request_attr), pcc->response_mr);
 	if(!pcc->kvs_request_attr_mr) {
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
 	}
 
-	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_attr_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_attr_mr->length;
-	pcc->snd_sge.lkey = pcc->kvs_request_attr_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_SEND;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
+	rdma_send_wr_prepare(&snd_wr, &(pcc->snd_sge), pcc->kvs_request_attr_mr);
 
 	/* send the memory we will use for WRITEs to the server */
 	debug("Posting send\n");
@@ -703,6 +694,19 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
  * Shared functions
  *
  **/
+struct ibv_mr *setup_md_attr(struct ibv_pd *pd, struct rdma_buffer_attr *attr, struct ibv_mr *mr)
+{
+	struct ibv_mr *attr_mr;
+	/* setup the server_side memory attributes with create buffer */
+	attr->address = (uint64_t) mr->addr;
+	attr->length = (uint32_t) mr->length;
+	attr->stag.local_stag = (uint32_t) mr->lkey;
+
+	/* register the attributes structure as sendable memory */
+	return rdma_buffer_register(pd, attr, sizeof(*attr), PERM_L_RW);
+}
+
+
 void rdma_write_wr_prepare(struct ibv_send_wr *wr, 
 	struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr)
 {
@@ -758,38 +762,6 @@ int rdma_post_write_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp)
 	return 0;
 }
 
-/*int rdma_post_write()
-{
-	struct ibv_send_wr 	snd_wr;
-	struct ibv_send_wr	*bad_snd_wr = NULL;
-	struct ibv_wc 		wc;
-	int 				ret = -1;
-
-	pcc->snd_sge.addr = (uint64_t) pcc->kvs_request_mr->addr;
-	pcc->snd_sge.length = (uint32_t) pcc->kvs_request_mr->length;
-	pcc->snd_sge.lkey = pcc->kvs_request_mr->lkey;
-	bzero(&snd_wr, sizeof(snd_wr));
-	snd_wr.sg_list = &(pcc->snd_sge);
-	snd_wr.num_sge = 1;
-	snd_wr.opcode = IBV_WR_RDMA_WRITE;
-	snd_wr.send_flags = IBV_SEND_SIGNALED;
-	snd_wr.wr.rdma.rkey = pcc->server_md_attr.stag.remote_stag;
-	snd_wr.wr.rdma.remote_addr = pcc->server_md_attr.address;
-
-	ret = ibv_post_send(pcc->qp, &snd_wr, &bad_snd_wr);
-	if(ret) {
-		log_err("ibv_post_send() failed");
-		return -errno;
-	}
-
-	ret = rdma_spin_cq(pcc->cq, &wc, 1);
-	if(ret != 1) {
-		log_err("rdma_spin_cq() failed");
-		return ret;
-	}
-	debug("Buffer written to server\n");
-	return 0;
-}*/
 
 
 int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp)
@@ -814,12 +786,12 @@ int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp)
 
 void rdma_recv_wr_prepare(struct ibv_recv_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr)
 {
-	memset(sg, 0, sizeof(sg));
+	memset(sg, 0, sizeof(*sg));
 	sg->addr = (uint64_t)mr->addr;
 	sg->length = (uint32_t)mr->length;
 	sg->lkey = (uint32_t)mr->lkey;
 
-	memset(wr, 0, sizeof(wr));
+	memset(wr, 0, sizeof(*wr));
 	wr->sg_list = sg;
 	wr->num_sge = 1;
 }
@@ -858,11 +830,11 @@ int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp)
 
 void rdma_send_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr)
 {
-	memset(sg, 0, sizeof(sg));
+	memset(sg, 0, sizeof(*sg));
 	sg->addr = (uint64_t) mr->addr;
 	sg->length = (uint32_t)mr->length;
 	sg->lkey = (uint32_t)mr->lkey;
-	memset(wr, 0, sizeof(wr));
+	memset(wr, 0, sizeof(*wr));
 	wr->sg_list = sg;
 	wr->num_sge = 1;
 	wr->opcode = IBV_WR_SEND;
@@ -872,7 +844,8 @@ void rdma_send_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv
 int rdma_post_send_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp)
 {
 	struct ibv_send_wr *bad_wr = NULL;
-	if(ibv_post_send(qp, wr, &bad_wr)) {
+	int ret = ibv_post_send(qp, wr, &bad_wr);
+	if(ret) {
 		log_err("ibv_post_send() failed");
 		return -errno;
 	}
@@ -896,16 +869,16 @@ int rdma_poll_cq(struct ibv_cq *cq,
 		}
 		total_wc += ret;
 
-		if(ret > 0) {
-			ret = validate_wcs(wc, total_wc);
-			if(ret) return ret;
-		}
 
 		if(total_wc < max_wc && timeout > 0) {
 			usleep(timeout);
 		}
 	} while(total_wc < max_wc);
 
+	if(total_wc > 0) {
+		ret = validate_wcs(wc, total_wc);
+		if(ret) return ret;
+	}
 
 	return total_wc;
 }
@@ -925,15 +898,11 @@ int rdma_spin_cq(struct ibv_cq *cq,
 			return -ret;
 		}
 		total_wc += ret;
-		if(ret > 0) {
-			ret = validate_wcs(wc, total_wc);
-			if(ret) return ret;
-		}
 		//debug("polled, %d wc total\n", total_wc);
 	} while(total_wc < max_wc);
 
-	/*ret = validate_wcs(wc, total_wc);
-	if(ret) return ret;*/
+	ret = validate_wcs(wc, total_wc);
+	if(ret) return ret;
 
 	return total_wc;
 }
@@ -976,17 +945,6 @@ int validate_wcs(struct ibv_wc *wc, int tot)
 					break;
 			}
 			return -(wc[i].status);
-		} else {
-			switch(wc[i].opcode) {
-				case IBV_WC_SEND:
-					debug("SEND completed\n");
-					break;
-				case IBV_WC_RECV:
-					debug("RECV completed\n");
-					break;
-				default:
-					break;
-			}
 		}
 	}
 	return 0;

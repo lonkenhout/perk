@@ -42,6 +42,7 @@ int parse_put_request(char *request,
 	}
 	if(j > v_sz) return MALFORMED;
 	v[j] = '\0';
+
 	return PUT;
 }
 
@@ -191,6 +192,12 @@ void get_time(struct timeval *t)
 		log_err("gettimeofday() failed");
 		exit(1);
 	}
+}
+
+void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e)
+{
+	double time = compute_time(t_s, t_e, SCALE_MCSEC);
+	printf("%s: %.2f microsec\n", msg, time);
 }
 
 double compute_time(struct timeval start, struct timeval end, double scale)

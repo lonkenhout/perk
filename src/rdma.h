@@ -25,6 +25,29 @@ struct __attribute((packed)) rdma_buffer_attr {
   }stag;
 };
 
+
+enum RDMA_COMBINATION {
+	RDMA_COMBO_WR,
+	RDMA_COMBO_WRIMM,
+	RDMA_COMBO_SD,
+	RDMA_COMBO_RD,
+};
+
+struct request{
+	enum REQUEST_TYPE type; 
+	char key[MAX_KEY_SIZE];
+	char val[MAX_VAL_SIZE];
+};
+
+struct verb_rdma_config{
+	enum RDMA_COMBINATION		client;
+	enum RDMA_COMBINATION		server;
+};
+
+/* standard rdma configuration, determines how memory is registered */
+static enum RDMA_COMBINATION default_client_rdma_config = RDMA_COMBO_WR;
+static enum RDMA_COMBINATION default_server_rdma_config = RDMA_COMBO_SD;
+
 typedef struct pears_server_context{
 	struct sockaddr_in			server_sa;
 	
@@ -37,19 +60,10 @@ typedef struct pears_server_context{
 	struct ibv_cq				*cq;
 	struct ibv_qp_init_attr 	qp_init_attr;
 	
+	struct verb_rdma_config		config;
+	
 	uint32_t			total_ops;
 } PEARS_SVR_CTX;
-
-enum RDMA_COMBINATION {
-	RDMA_COMBO_WR,
-	RDMA_COMBO_WRIMM,
-	RDMA_COMBO_SD,
-	RDMA_COMBO_RD,
-};
-
-/* standard rdma configuration, determines how memory is registered */
-static enum RDMA_COMBINATION client_rdma_config = RDMA_COMBO_WR;
-static enum RDMA_COMBINATION server_rdma_config = RDMA_COMBO_SD;
 
 typedef struct pears_client_context{
 	struct sockaddr_in			client_sa;
@@ -63,6 +77,8 @@ typedef struct pears_client_context{
 	struct ibv_cq				*cq;
 	struct ibv_qp				*qp;
 	struct ibv_qp_init_attr 	qp_init_attr;
+	
+	struct verb_rdma_config		config;
 
 	/* local memory properties */
 	char						*kvs_request;
@@ -85,13 +101,13 @@ typedef struct pears_client_context{
 	struct ibv_sge				request_sge;
 	struct ibv_send_wr			request_wr;
 
-	/* work request related stuff for response*/
-	struct ibv_sge				response_sge;
-	union{
-		struct ibv_recv_wr		rc_wr;
-		struct ibv_send_wr		rd_wr;
-	} response_wr;
+	struct request				sd_request;
+	struct request				sd_response;
 
+	struct ibv_mr				*sd_request_mr;
+	struct ibv_mr				*sd_response_mr;
+
+	/* work request related stuff for response*/
 	struct ibv_sge				rec_sge;
 	struct ibv_sge				snd_sge;
 	struct ibv_sge				wr_sge;
@@ -119,6 +135,8 @@ typedef struct pears_client_conn{
 	struct ibv_cq				*cq;
 	struct ibv_comp_channel		*io_cc;
 	struct ibv_qp_init_attr 	qp_init_attr;
+	
+	struct verb_rdma_config		config;
 
 	struct ibv_mr				*md;
 	struct rdma_buffer_attr		md_attr;
@@ -132,6 +150,11 @@ typedef struct pears_client_conn{
 
 	struct ibv_mr				*response_mr;
 	struct ibv_mr				*imm_data;
+	
+	struct ibv_mr				*sd_request_mr;
+	struct ibv_mr				*sd_response_mr;
+	struct request				sd_request;
+	struct request				sd_response;
 
 	struct ibv_sge				rec_sge;
 	struct ibv_sge				snd_sge;
@@ -193,6 +216,8 @@ int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc);
 int client_disconnect(PEARS_CLT_CTX *pcc);
 
 /* shared functions */
+struct ibv_mr *setup_md_attr(struct ibv_pd *pd, struct rdma_buffer_attr *attr, struct ibv_mr *mr);
+
 int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp);
 int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp);
 

@@ -40,29 +40,30 @@ int parse_opts(int argc, char **argv){
 				break;
 			case 'c':
 				pcc->max_reqs = strtol(optarg, NULL, 0);
-				debug("doing %d requests\n", pcc->max_reqs);
+				debug("doing %ld requests\n", pcc->max_reqs);
+				printf("optargs: %ld\n", pcc->max_reqs);
 				break;
 			case 'r':
 				if(strncmp(optarg, "wr_sd", strlen("wr_sd")) == 0) {
 					printf("Using WRITE/SEND configuration");
-					client_rdma_config = RDMA_COMBO_WR;
-					server_rdma_config = RDMA_COMBO_SD;
+					pcc->config.client = RDMA_COMBO_WR;
+					pcc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "wrimm_sd", strlen("wrimm_sd")) == 0) {
 					printf("using WRITE with IMM/SEND configuration\n");
-					client_rdma_config = RDMA_COMBO_WRIMM;
-					server_rdma_config = RDMA_COMBO_SD;
+					pcc->config.client = RDMA_COMBO_WRIMM;
+					pcc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "sd_sd", strlen("sd_sd")) == 0) {
 					printf("using SEND/SEND configuration\n");
-					client_rdma_config = RDMA_COMBO_SD;
-					server_rdma_config = RDMA_COMBO_SD;
+					pcc->config.client = RDMA_COMBO_SD;
+					pcc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "wr_wr", strlen("wr_wr")) == 0) {
 					printf("using WRITE/WRITE configuration\n");
-					client_rdma_config = RDMA_COMBO_WR;
-					server_rdma_config = RDMA_COMBO_WR;
+					pcc->config.client = RDMA_COMBO_WR;
+					pcc->config.server = RDMA_COMBO_WR;
 				} else if(strncmp(optarg, "wr_rd", strlen("wr_rd")) == 0) {
 					printf("using WRITE/READ configuration\n");
-					client_rdma_config = RDMA_COMBO_WR;
-					server_rdma_config = RDMA_COMBO_RD;
+					pcc->config.client = RDMA_COMBO_WR;
+					pcc->config.server = RDMA_COMBO_RD;
 				} else {
 					fprintf(stderr, "Invalid configuration provided: %s\n", optarg);
 				}
@@ -120,6 +121,9 @@ int main(int argc, char **argv){
 	pcc->using_file = 0;
 	pcc->max_reqs = 1000000;
 
+	pcc->config.client = default_client_rdma_config;
+	pcc->config.client = default_server_rdma_config;
+
 	//strcpy(pcc->kvs_request,"placeholder");
 
 	parse_opts(argc, argv);
@@ -153,19 +157,19 @@ int main(int argc, char **argv){
 		log_err("client() failed");
 		goto clean_exit;
 	}*/
-	if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_WR) {
+	if(pcc->config.client == RDMA_COMBO_WR && pcc->config.server == RDMA_COMBO_WR) {
 		printf("starting wr_wr config\n");
 		ret = client_wr_wr(pcc);
-	} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_SD) {
+	} else if(pcc->config.client == RDMA_COMBO_WR && pcc->config.server == RDMA_COMBO_SD) {
 		printf("starting wr_sd config\n");
 		ret = client_wr_sd(pcc);
-	} else if(client_rdma_config == RDMA_COMBO_SD && server_rdma_config == RDMA_COMBO_SD) {
+	} else if(pcc->config.client == RDMA_COMBO_SD && pcc->config.server == RDMA_COMBO_SD) {
 		printf("starting sd_sd config\n");
 		ret = client_sd_sd(pcc);
-	} else if(client_rdma_config == RDMA_COMBO_WRIMM && server_rdma_config == RDMA_COMBO_SD) {
+	} else if(pcc->config.client == RDMA_COMBO_WRIMM && pcc->config.server == RDMA_COMBO_SD) {
 		printf("starting wrimm_sd config\n");
 		ret = client_wrimm_sd(pcc);
-	} else if(client_rdma_config == RDMA_COMBO_WR && server_rdma_config == RDMA_COMBO_RD) {
+	} else if(pcc->config.client == RDMA_COMBO_WR && pcc->config.server == RDMA_COMBO_RD) {
 		printf("starting wr_rd config\n");
 		ret = client_wr_rd(pcc);
 	} else {
