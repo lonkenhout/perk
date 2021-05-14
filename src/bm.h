@@ -2,15 +2,39 @@
 #define __PEARS_BENCHMARK_H__
 
 /* definitions created by cmake for choosing benchmarks */
-#ifdef BM_CLIENT_LATENCY
-#define bm_client_latency_start(t) get_time(t);
-#define bm_client_latency_end(t) get_time(t);
-#define bm_client_latency_show(msg, t_s, t_e) print_time_diff(msg, t_s, t_e);
+/* for making server exit after all clients disconnect */
+#ifdef BM_SERVER_EXIT
+#define PERK_SERVER_EXIT_ON_DC 1
+
+#else
+#define PERK_SERVER_EXIT_ON_DC 0
+
+#endif
+
+/* benchmark for latency */
+#ifdef BM_LATENCY
+#define bm_latency_start(t) get_time(t);
+#define bm_latency_end(t) get_time(t);
+#define bm_latency_show(msg, t_s, t_e) print_time_diff(msg, t_s, t_e);
 
 #else 
-#define bm_client_latency_start(t)
-#define bm_client_latency_stop(t)
-#define bm_client_latency_show(msg, t_s, t_e)
+#define bm_latency_start(t)
+#define bm_latency_end(t)
+#define bm_latency_show(msg, t_s, t_e)
 #endif
+
+/* benchmark for ops per sec */
+#ifdef BM_OPS_PER_SEC
+#define bm_ops_start(t) get_time(t);
+#define bm_ops_end(t) get_time(t);
+#define bm_ops_show(o, t_s, t_e) print_ops_per_sec(o, t_s, t_e);
+
+#else
+#define bm_ops_start(t)
+#define bm_ops_end(t)
+#define bm_ops_show(o, t_s, t_e)
+#endif
+
+
 
 #endif
