@@ -221,21 +221,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			pc_conn = &(conns->clients[conn_i]);
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
-			if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_WR) {
-				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_wr, (void*) pc_conn);
-			} else if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_SD) {
-				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_sd, (void*) pc_conn);
-			} else if(psc->config.client == RDMA_COMBO_SD && psc->config.server == RDMA_COMBO_SD) {
-				pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
-			} else if(psc->config.client == RDMA_COMBO_WRIMM && psc->config.server == RDMA_COMBO_SD) {
-				pthread_create(&(conns->threads[conn_i]), NULL, worker_wrimm_sd, (void*) pc_conn);
-			} else if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_RD) {
-				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_rd, (void*) pc_conn);
-			} else {
-				fprintf(stderr, "error: unknown rdma combination\n");
-				exit(1);
-			}
-
+			pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
 
 			if(ret == POLL_CLIENT_CONNECT_ESTABLISHED) {
 				conns->established[conn_i] = 1;

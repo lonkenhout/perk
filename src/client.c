@@ -151,29 +151,10 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 
-	/*ret = client(pcc);
+	ret = client(pcc);
 	if(ret) {
 		log_err("client() failed");
 		goto clean_exit;
-	}*/
-	if(pcc->config.client == RDMA_COMBO_WR && pcc->config.server == RDMA_COMBO_WR) {
-		printf("starting wr_wr config\n");
-		ret = client_wr_wr(pcc);
-	} else if(pcc->config.client == RDMA_COMBO_WR && pcc->config.server == RDMA_COMBO_SD) {
-		printf("starting wr_sd config\n");
-		ret = client_wr_sd(pcc);
-	} else if(pcc->config.client == RDMA_COMBO_SD && pcc->config.server == RDMA_COMBO_SD) {
-		printf("starting sd_sd config\n");
-		ret = client(pcc);
-	} else if(pcc->config.client == RDMA_COMBO_WRIMM && pcc->config.server == RDMA_COMBO_SD) {
-		printf("starting wrimm_sd config\n");
-		ret = client_wrimm_sd(pcc);
-	} else if(pcc->config.client == RDMA_COMBO_WR && pcc->config.server == RDMA_COMBO_RD) {
-		printf("starting wr_rd config\n");
-		ret = client_wr_rd(pcc);
-	} else {
-		fprintf(stderr, "error: unknown rdma combination\n");
-		exit(1);
 	}
 	
 

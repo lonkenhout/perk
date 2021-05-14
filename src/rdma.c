@@ -127,6 +127,17 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 	pc_conn->response_mr = rdma_buffer_alloc(pc_conn->pd,
 											MAX_LINE_LEN,
 											PERM_R_RW);
+	if(pc_conn->config.server == RDMA_COMBO_SD) {
+		pc_conn->sd_response_mr = rdma_buffer_register(pc_conn->pd,
+														&(pc_conn->sd_response),
+														sizeof(pc_conn->sd_response), 
+														PERM_L_RW);
+	} else {
+		pc_conn->sd_response_mr = rdma_buffer_register(pc_conn->pd,
+														&(pc_conn->sd_response),
+														sizeof(pc_conn->sd_response), 
+														PERM_R_RW);
+	}
 	return 0;
 }
 
@@ -200,18 +211,32 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		log_err("rdma_poll_cq() failed");
 		return ret;
 	}
-
-	/* allocate WRITEable buffer based on received length */
-	debug("New buffer of length %u bytes requested\n", pc_conn->md_attr.length);
-	pc_conn->server_buf = rdma_buffer_alloc(pc_conn->pd,
-											pc_conn->md_attr.length,
-											PERM_R_RW);
-	if(!pc_conn->server_buf) {
-		log_err("rdma_buffer_alloc() failed");
-		return -ENOMEM;
+	
+	/* struct request memory */
+	if(pc_conn->config.client == RDMA_COMBO_SD) {
+		pc_conn->sd_request_mr = rdma_buffer_register(pc_conn->pd, &(pc_conn->sd_request), sizeof(pc_conn->sd_request), PERM_L_RW);
+		if(!pc_conn->sd_request_mr) {
+			log_err("ionfnonfoianeoidfna");
+			return -errno;
+		}
+		/* prepost receive on that memory in case of sends*/
+		rdma_recv_wr_prepare(&(pc_conn->recv_wr), &(pc_conn->rec_sge), pc_conn->sd_request_mr);
+		ret = rdma_post_recv_reuse(&(pc_conn->recv_wr), pc_conn->qp);
+		if(ret) {
+			log_err("rdma_post_recv() failed");
+			return 1;
+		}
+	} else {
+		pc_conn->sd_request_mr = rdma_buffer_register(pc_conn->pd, &(pc_conn->sd_request), sizeof(pc_conn->sd_request), PERM_R_RW);
+        if(!pc_conn->sd_request_mr) {
+            log_err("failed to register request memory");
+            return -errno;
+        }
 	}
 
-	pc_conn->server_md = setup_md_attr(pc_conn->pd, &(pc_conn->server_md_attr), pc_conn->server_buf);
+
+	/* put the request struct into the attribute struct to send to client */
+	pc_conn->server_md = setup_md_attr(pc_conn->pd, &(pc_conn->server_md_attr), pc_conn->sd_request_mr);
 	if(!pc_conn->server_md) {
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
@@ -228,17 +253,6 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		}
 	}
 
-	pc_conn->sd_request_mr = rdma_buffer_register(pc_conn->pd, &(pc_conn->sd_request), sizeof(pc_conn->sd_request), PERM_L_RW);
-	if(!pc_conn->sd_request_mr) {
-		log_err("ionfnonfoianeoidfna");
-		return -errno;
-	}
-	rdma_recv_wr_prepare(&(pc_conn->recv_wr), &(pc_conn->rec_sge), pc_conn->sd_request_mr);
-	ret = rdma_post_recv_reuse(&(pc_conn->recv_wr), pc_conn->qp);
-	if(ret) {
-		log_err("rdma_post_recv() failed");
-		return 1;
-	}
 
 	rdma_send_wr_prepare(&send_wr, &(pc_conn->snd_sge), pc_conn->server_md);
 	debug("posting send\n");
@@ -248,6 +262,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return -errno;
 	}
 
+	//TODO: remove this code
 	/* setup attributes to send to client*/
 	pc_conn->server_rd_md_mr = setup_md_attr(pc_conn->pd, &(pc_conn->server_rd_md_attr), pc_conn->response_mr);
 	if(!pc_conn->server_rd_md_mr) {
@@ -289,16 +304,14 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		log_err("ibv_destroy_comp_channel() failed");
 	}
 
-	rdma_buffer_free(pc_conn->server_buf);
-	rdma_buffer_free(pc_conn->response_mr);
-	rdma_buffer_free(pc_conn->imm_data);
-	rdma_buffer_deregister(pc_conn->md);
-	rdma_buffer_deregister(pc_conn->server_md);
-	rdma_buffer_deregister(pc_conn->server_rd_md_mr);
-	if(pc_conn->sd_response_mr != NULL) {
-		rdma_buffer_deregister(pc_conn->sd_response_mr);
-	}
-	rdma_buffer_deregister(pc_conn->sd_request_mr);
+	if(pc_conn->server_buf != NULL) rdma_buffer_free(pc_conn->server_buf);
+	if(pc_conn->response_mr != NULL)rdma_buffer_free(pc_conn->response_mr);
+	if(pc_conn->imm_data != NULL)rdma_buffer_free(pc_conn->imm_data);
+	if(pc_conn->md != NULL) rdma_buffer_deregister(pc_conn->md);
+	if(pc_conn->server_md != NULL) rdma_buffer_deregister(pc_conn->server_md);
+	if(pc_conn->server_rd_md_mr != NULL) rdma_buffer_deregister(pc_conn->server_rd_md_mr);
+	if(pc_conn->sd_response_mr != NULL) rdma_buffer_deregister(pc_conn->sd_response_mr);
+	if(pc_conn->sd_request_mr != NULL) rdma_buffer_deregister(pc_conn->sd_request_mr);
 
 	ret = ibv_dealloc_pd(pc_conn->pd);
 	if(ret) {
@@ -554,19 +567,19 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 
 
 	/* register region for write from server->client */
-	pcc->response_mr = rdma_buffer_register(pcc->pd,
+	/*pcc->response_mr = rdma_buffer_register(pcc->pd,
 										  pcc->response,
 										  MAX_LINE_LEN,
 										  PERM_R_RW);
 	if(!pcc->response_mr) {
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
-	}
+	}*/
 
 
 
 	/* store request memory in attribute to send to the server for registration */
-	pcc->kvs_request_attr_mr = setup_md_attr(pcc->pd, &(pcc->kvs_request_attr), pcc->response_mr);
+	pcc->kvs_request_attr_mr = setup_md_attr(pcc->pd, &(pcc->kvs_request_attr), pcc->sd_response_mr);
 	if(!pcc->kvs_request_attr_mr) {
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
@@ -636,14 +649,14 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
 		log_err("ibv_destroy_comp_channel() failed");
 	}
 	
-	rdma_buffer_deregister(pcc->server_md_mr);
-	rdma_buffer_deregister(pcc->kvs_request_attr_mr);
-	rdma_buffer_deregister(pcc->kvs_request_mr);
-	rdma_buffer_deregister(pcc->response_mr);
-	rdma_buffer_deregister(pcc->server_rd_md_mr);
+	if(pcc->server_md_mr != NULL) rdma_buffer_deregister(pcc->server_md_mr);
+	if(pcc->kvs_request_attr_mr != NULL) rdma_buffer_deregister(pcc->kvs_request_attr_mr);
+	if(pcc->kvs_request_mr != NULL) rdma_buffer_deregister(pcc->kvs_request_mr);
+	if(pcc->response_mr != NULL) rdma_buffer_deregister(pcc->response_mr);
+	if(pcc->server_rd_md_mr != NULL) rdma_buffer_deregister(pcc->server_rd_md_mr);
 
-	rdma_buffer_deregister(pcc->sd_request_mr);
-	rdma_buffer_deregister(pcc->sd_response_mr);
+	if(pcc->sd_request_mr != NULL) rdma_buffer_deregister(pcc->sd_request_mr);
+	if(pcc->sd_response_mr != NULL) rdma_buffer_deregister(pcc->sd_response_mr);
 
 	ret = ibv_dealloc_pd(pcc->pd);
 	if(ret) {
@@ -776,9 +789,10 @@ void rdma_recv_wr_prepare(struct ibv_recv_wr *wr, struct ibv_sge *sg, struct ibv
 int rdma_post_recv_reuse(struct ibv_recv_wr *wr, struct ibv_qp *qp)
 {
 	struct ibv_recv_wr *bad_wr = NULL;
-	if(ibv_post_recv(qp, wr, &bad_wr)) {
+	int ret;
+	if((ret = ibv_post_recv(qp, wr, &bad_wr))) {
 		log_err("ibv_post_recv() failed");
-		return -errno;
+		return ret;
 	}
 	return 0;
 }

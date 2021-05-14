@@ -6,7 +6,7 @@
 #include "server.h"
 
 
-int handle_request(struct request *request, struct request *response);
+int handle_request(PEARS_CLIENT_CONN *pcc, struct request *request, struct request *response);
 void handle_request_get(struct request *request, struct request *response);
 void handle_request_put(struct request *request, struct request *response);
 void handle_request_exit(struct request *request, struct request *response);
