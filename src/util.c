@@ -197,7 +197,14 @@ void get_time(struct timeval *t)
 void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e)
 {
 	double time = compute_time(t_s, t_e, SCALE_MCSEC);
-	printf("%s: %.2f microsec\n", msg, time);
+	printf("== benchmark [latency:%s][%.4f usec]\n", msg, time);
+}
+
+void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e)
+{
+	double time = compute_time(t_s, t_e, SCALE_MSEC);
+	printf("== processed %ld requests in %.0f msec\n", ops, time);
+	printf("== benchmark [ops_per_sec][%.1f]\n", ops/(time/1000.0));
 }
 
 double compute_time(struct timeval start, struct timeval end, double scale)

@@ -167,7 +167,7 @@ typedef struct pears_client_conn{
 	struct ibv_send_wr			rd_wr;
 } PEARS_CLIENT_CONN;
 
-#define MAX_CLIENTS (8)
+#define MAX_CLIENTS (32)
 typedef struct pears_client_collection{
 	int 					active[MAX_CLIENTS];
 	int 					established[MAX_CLIENTS];
@@ -216,6 +216,7 @@ int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc);
 int client_disconnect(PEARS_CLT_CTX *pcc);
 
 /* shared functions */
+void qp_init_attr_prepare(struct ibv_qp_init_attr *qp_attr, struct ibv_cq *cq);
 struct ibv_mr *setup_md_attr(struct ibv_pd *pd, struct rdma_buffer_attr *attr, struct ibv_mr *mr);
 
 int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp);

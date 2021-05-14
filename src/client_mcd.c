@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
+#include "bm.h"
 
 #define MAX_CONFIG_LEN (50)
 
@@ -71,7 +72,7 @@ int main(int argc, char **argv) {
 	}
 
 	/* timing */
-	struct timeval start, end;
+	struct timeval o_s, o_e, l_s, l_e;
 
 	char config[MAX_CONFIG_LEN];
 	memset(config, 0, sizeof(config));
@@ -93,9 +94,10 @@ int main(int argc, char **argv) {
 		log_err("error inserting key\n");
 	}
 	/* start timer for ops/sec */
-	get_time(&start);
+	bm_ops_start(&o_s);
 	int i = 0;
 	while(i < max_reqs) {
+		bm_latency_start(&l_s);
 		rc = memcached_mget(memc, (const char * const*)&key, &key_length, 1);
 
 		char ret_key[MEMCACHED_MAX_KEY];
@@ -107,16 +109,15 @@ int main(int argc, char **argv) {
 			if(rc != MEMCACHED_SUCCESS) {
 				printf("error retrieving value for key\n"); break;
 			} 
+			bm_latency_end(&l_e);
+			bm_latency_show("mcd", l_s, l_e);
 			free(ret_value);
 			memset(ret_key, 0, sizeof(ret_key));
 		}
 		i++;
 	}
-	get_time(&end);
-	double time = compute_time(start, end, SCALE_MSEC);
-	printf("== processed %d requests in %.0f ms\n",
-	i, time);
-	printf("== ops/s: %.1f\n", ((double)i)/(time/1000));
+	bm_ops_end(&o_e);
+	bm_ops_show(max_reqs, o_s, o_e);
 
 	memcached_free(memc);
 	return 0;

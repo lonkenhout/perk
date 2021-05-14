@@ -97,10 +97,6 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 	}
 	debug("completion channel created\n");
 
-	//TODO: check comp_vector arg
-	//		signalling for CQs that arent for receiving metadata
-	//		could be interesting spot for optimization
-	// https://linux.die.net/man/3/ibv_create_cq
 	pc_conn->cq = ibv_create_cq(pc_conn->cm_cid->verbs,
 								MAX_CQ_SIZE,
 								NULL,
@@ -116,17 +112,8 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 		log_err("ibv_req_notify_cq() failed");
 		return -errno;
 	}
-	/* modify mode of completion events to non-blocking */
-	
 
-	bzero(&(pc_conn->qp_init_attr), sizeof(pc_conn->qp_init_attr));
-	pc_conn->qp_init_attr.cap.max_recv_sge = MAX_SGE;
-	pc_conn->qp_init_attr.cap.max_recv_wr = MAX_WR;
-	pc_conn->qp_init_attr.cap.max_send_sge = MAX_SGE;
-	pc_conn->qp_init_attr.cap.max_send_wr = MAX_WR;
-	pc_conn->qp_init_attr.qp_type = IBV_QPT_RC;
-	pc_conn->qp_init_attr.recv_cq = pc_conn->cq;
-	pc_conn->qp_init_attr.send_cq = pc_conn->cq;
+	qp_init_attr_prepare(&(pc_conn->qp_init_attr), pc_conn->cq);
 	ret = rdma_create_qp(pc_conn->cm_cid,
 						pc_conn->pd,
 						&(pc_conn->qp_init_attr));
@@ -143,27 +130,6 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 	return 0;
 }
 
-/*int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
-{
-	struct rdma_cm_event *cm_event = NULL;
-	int ret = -1;
-	
-	debug("Waiting for client to connect\n");
-	ret = rdma_cm_event_rcv(psc->cm_ec, RDMA_CM_EVENT_CONNECT_REQUEST, &cm_event);
-	if(ret) {
-		log_err("failed to retrieve cm event");
-		return ret;
-	}
-	pc_conn->cm_cid = cm_event->id;
-	
-	ret = rdma_ack_cm_event(cm_event);
-	if(ret) {
-		log_err("failed to ACK cm event");
-		return -errno;
-	}
-	debug("RDMA client connected\n");
-	return 0;
-}*/
 
 int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 {
@@ -185,13 +151,8 @@ int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 		return -ENOMEM;
 	}
 
-	pc_conn->rec_sge.addr = (uint64_t) pc_conn->md->addr;
-	pc_conn->rec_sge.length = pc_conn->md->length;
-	pc_conn->rec_sge.lkey = pc_conn->md->lkey;
-
-	memset(&recv_wr, 0, sizeof(recv_wr));
-	recv_wr.sg_list = &(pc_conn->rec_sge);
-	recv_wr.num_sge = 1;
+	
+	rdma_recv_wr_prepare(&recv_wr, &(pc_conn->rec_sge), pc_conn->md);
 	debug("posting recv\n");
 	print_curr_time();
 	ret = ibv_post_recv(pc_conn->qp, &recv_wr, &bad_recv_wr);
@@ -279,18 +240,8 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 		return 1;
 	}
 
-
-	pc_conn->snd_sge.addr = (uint64_t) &(pc_conn->server_md_attr);
-	pc_conn->snd_sge.length = sizeof(pc_conn->server_md_attr);
-	pc_conn->snd_sge.lkey = pc_conn->server_md->lkey;
-
-	bzero(&send_wr, sizeof(send_wr));
-	send_wr.sg_list = &(pc_conn->snd_sge);
-	send_wr.num_sge = 1;
-	send_wr.opcode = IBV_WR_SEND;
-	send_wr.send_flags = IBV_SEND_SIGNALED;
+	rdma_send_wr_prepare(&send_wr, &(pc_conn->snd_sge), pc_conn->server_md);
 	debug("posting send\n");
-	print_curr_time();
 	ret = ibv_post_send(pc_conn->qp, &send_wr, &bad_send_wr);
 	if(ret) {
 		log_err("ibv_post_send() failed");
@@ -474,14 +425,7 @@ int init_client_dev(PEARS_CLT_CTX *pcc, struct sockaddr_in *svr_sa)
 		return -errno;
 	}
 
-	bzero(&(pcc->qp_init_attr), sizeof(pcc->qp_init_attr));
-	pcc->qp_init_attr.cap.max_recv_sge = MAX_SGE;
-	pcc->qp_init_attr.cap.max_recv_wr = MAX_WR;
-	pcc->qp_init_attr.cap.max_send_sge = MAX_SGE;
-	pcc->qp_init_attr.cap.max_send_wr = MAX_WR;
-	pcc->qp_init_attr.qp_type = IBV_QPT_RC;
-	pcc->qp_init_attr.recv_cq = pcc->cq;
-	pcc->qp_init_attr.send_cq = pcc->cq;
+	qp_init_attr_prepare(&(pcc->qp_init_attr), pcc->cq);
 	ret = rdma_create_qp(pcc->cm_cid, pcc->pd, &(pcc->qp_init_attr));
 	if(ret) {
 		log_err("rdma_create_qp() failed");
@@ -506,12 +450,6 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
 		return -ENOMEM;
 	}
 
-	/*pcc->rec_sge.addr = (uint64_t) pcc->server_md_mr->addr;
-	pcc->rec_sge.length = (uint32_t) pcc->server_md_mr->length;
-	pcc->rec_sge.lkey = (uint32_t) pcc->server_md_mr->lkey;
-	bzero(&(rec_wr), sizeof(rec_wr));
-	rec_wr.sg_list = &(pcc->rec_sge);
-	rec_wr.num_sge = 1;*/
 	rdma_recv_wr_prepare(&rec_wr, &(pcc->rec_sge), pcc->server_md_mr);
 	debug("pre posting recv\n");
 	print_curr_time();
@@ -581,6 +519,30 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 	int ret = -1;
 	debug("Registering rdma buffers\n");
 	/* register request memory, this will be used for client->server */
+	if(pcc->config.client == RDMA_COMBO_SD) {	
+		pcc->sd_request_mr = rdma_buffer_register(pcc->pd, &(pcc->sd_request), sizeof(pcc->sd_request), PERM_L_RW);
+		if(!pcc->sd_request_mr) {
+			log_err("failed to register memory\n");
+		}
+	} else {
+		pcc->sd_request_mr = rdma_buffer_register(pcc->pd, &(pcc->sd_request), sizeof(pcc->sd_request), PERM_R_RW);
+		if(!pcc->sd_request_mr) {
+			log_err("failed to register memory\n");
+		}
+	}
+	/* register response memory, will be used for server->client, or READ client<-server */
+	if(pcc->config.server == RDMA_COMBO_SD) {
+		pcc->sd_response_mr = rdma_buffer_register(pcc->pd, &(pcc->sd_response), sizeof(pcc->sd_response), PERM_L_RW);
+		if(!pcc->sd_response_mr) {
+			log_err("failed ot register response memory\n");
+		}
+	} else {
+		pcc->sd_response_mr = rdma_buffer_register(pcc->pd, &(pcc->sd_response), sizeof(pcc->sd_response), PERM_R_RW);
+		if(!pcc->sd_response_mr) {
+			log_err("failed ot register response memory\n");
+		}
+		
+	}
 	pcc->kvs_request_mr = rdma_buffer_register(pcc->pd,
 											   pcc->kvs_request,
 											   MAX_LINE_LEN,
@@ -680,6 +642,9 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
 	rdma_buffer_deregister(pcc->response_mr);
 	rdma_buffer_deregister(pcc->server_rd_md_mr);
 
+	rdma_buffer_deregister(pcc->sd_request_mr);
+	rdma_buffer_deregister(pcc->sd_response_mr);
+
 	ret = ibv_dealloc_pd(pcc->pd);
 	if(ret) {
 		log_err("ibv_dealloc_pd() failed");
@@ -694,6 +659,18 @@ int client_disconnect(PEARS_CLT_CTX *pcc)
  * Shared functions
  *
  **/
+void qp_init_attr_prepare(struct ibv_qp_init_attr *qp_attr, struct ibv_cq *cq)
+{
+	memset(qp_attr, 0, sizeof(*qp_attr));
+    qp_attr->cap.max_recv_sge = MAX_SGE;
+    qp_attr->cap.max_recv_wr = MAX_WR;
+    qp_attr->cap.max_send_sge = MAX_SGE;
+    qp_attr->cap.max_send_wr = MAX_WR;
+    qp_attr->qp_type = IBV_QPT_RC;
+    qp_attr->recv_cq = cq;
+    qp_attr->send_cq = cq;
+}
+
 struct ibv_mr *setup_md_attr(struct ibv_pd *pd, struct rdma_buffer_attr *attr, struct ibv_mr *mr)
 {
 	struct ibv_mr *attr_mr;

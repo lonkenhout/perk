@@ -22,11 +22,11 @@ int parse_opts(int argc, char **argv){
 					log_err("invalid ip address provided: %s", optarg);
 					return ret;
 				}
-				debug("ip address set to %s\n", optarg);
+				debug("SET ip address to %s\n", optarg);
 				break;
 			case 'p':
 				pcc->client_sa.sin_port = htons(strtol(optarg, NULL, 0));
-				debug("port set to %s\n", optarg);
+				debug("SET port to %s\n", optarg);
 				break;
 			case 'i':
 				debug("opening %s\n", optarg);
@@ -40,28 +40,27 @@ int parse_opts(int argc, char **argv){
 				break;
 			case 'c':
 				pcc->max_reqs = strtol(optarg, NULL, 0);
-				debug("doing %ld requests\n", pcc->max_reqs);
-				printf("optargs: %ld\n", pcc->max_reqs);
+				debug("SET max requests to %ld requests\n", pcc->max_reqs);
 				break;
 			case 'r':
 				if(strncmp(optarg, "wr_sd", strlen("wr_sd")) == 0) {
-					printf("Using WRITE/SEND configuration");
+					debug("Using WRITE/SEND configuration");
 					pcc->config.client = RDMA_COMBO_WR;
 					pcc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "wrimm_sd", strlen("wrimm_sd")) == 0) {
-					printf("using WRITE with IMM/SEND configuration\n");
+					debug("using WRITE with IMM/SEND configuration\n");
 					pcc->config.client = RDMA_COMBO_WRIMM;
 					pcc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "sd_sd", strlen("sd_sd")) == 0) {
-					printf("using SEND/SEND configuration\n");
+					debug("using SEND/SEND configuration\n");
 					pcc->config.client = RDMA_COMBO_SD;
 					pcc->config.server = RDMA_COMBO_SD;
 				} else if(strncmp(optarg, "wr_wr", strlen("wr_wr")) == 0) {
-					printf("using WRITE/WRITE configuration\n");
+					debug("using WRITE/WRITE configuration\n");
 					pcc->config.client = RDMA_COMBO_WR;
 					pcc->config.server = RDMA_COMBO_WR;
 				} else if(strncmp(optarg, "wr_rd", strlen("wr_rd")) == 0) {
-					printf("using WRITE/READ configuration\n");
+					debug("using WRITE/READ configuration\n");
 					pcc->config.client = RDMA_COMBO_WR;
 					pcc->config.server = RDMA_COMBO_RD;
 				} else {
@@ -82,7 +81,7 @@ int get_input(char **dest, int lines) {
 	debug("Gathering lines to send\n");
 	int i, ret = -1, total = 0;
 	for(i = 0; i < lines; ++i) {
-		debug("Requesting input line via stdin [%d/%d]\n", i+1, lines);
+		debug("Requesting input line from file or stdin [%d/%d]\n", i+1, lines);
 		if(pcc->using_file) {
 			ret = get_file_line(pcc->f_ptr, dest[i], MAX_LINE_LEN);
 		} else {
@@ -165,7 +164,7 @@ int main(int argc, char **argv){
 		ret = client_wr_sd(pcc);
 	} else if(pcc->config.client == RDMA_COMBO_SD && pcc->config.server == RDMA_COMBO_SD) {
 		printf("starting sd_sd config\n");
-		ret = client_sd_sd(pcc);
+		ret = client(pcc);
 	} else if(pcc->config.client == RDMA_COMBO_WRIMM && pcc->config.server == RDMA_COMBO_SD) {
 		printf("starting wrimm_sd config\n");
 		ret = client_wrimm_sd(pcc);

@@ -86,6 +86,7 @@ int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
 
 void get_time(struct timeval *t);
 void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e);
+void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e);
 double compute_time(struct timeval start, struct timeval end, double scale);
 void print_curr_time(void);
 #endif

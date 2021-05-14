@@ -51,6 +51,81 @@ void handle_request_exit(struct request *request, struct request *response)
 	response->type = EXIT_OK;
 }
 
+int prepare_response_server(PEARS_CLIENT_CONN *pcc)
+{
+	int ret = 0;
+	switch(pcc->config.server) {
+		case RDMA_COMBO_SD:
+			rdma_send_wr_prepare(&(pcc->send_wr), &(pcc->snd_sge), pcc->sd_response_mr);
+			break;
+		default:
+			break;
+	}
+	return ret;
+}
+
+int prepare_request_server(PEARS_CLIENT_CONN *pcc)
+{
+	int ret = 0;
+	switch(pcc->config.client) {
+		case RDMA_COMBO_SD:
+			ret = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
+		    if(ret) log_err("rdma_post_recv() failed");
+			break;
+		default:
+			break;
+	}
+	return ret;
+}
+
+int recv_request(PEARS_CLIENT_CONN *pcc)
+{
+	int ret = -1;
+	struct ibv_wc wc;
+	switch(pcc->config.client) {
+		case RDMA_COMBO_SD:
+			ret = rdma_spin_cq(pcc->cq, &wc, 1);
+	        if(ret != 1) log_err("retrieve_work_completion_events() failed");
+			ret ^= 1;
+			break;
+		default:
+			break;
+	}
+	return ret;
+}
+
+int send_response(PEARS_CLIENT_CONN *pcc)
+{
+	int ret = -1;
+	struct ibv_wc wc;
+	switch(pcc->config.server) {
+		case RDMA_COMBO_SD:
+			ret = rdma_post_send_reuse(&(pcc->send_wr), pcc->qp);
+	        if(ret) log_err("rdma_post_send() failed");
+	        
+	        ret = rdma_spin_cq(pcc->cq, &wc, 1);
+	        if(ret != 1) log_err("retrieve_work_completion_events() failed");
+			ret ^= 1;
+			break;
+		default:
+			break;
+	}
+	return ret;
+}
+
+int prep_next_iter(PEARS_CLIENT_CONN *pcc)
+{
+	int ret = -1;
+	switch(pcc->config.server) {
+		case RDMA_COMBO_SD:
+			ret = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
+	        if(ret) log_err("rdma_post_recv() failed");
+			break;
+		default:
+			break;
+	}
+	return ret;
+}
 
 void *worker_wr_sd(void *args)
 {
@@ -257,6 +332,45 @@ void *worker_wrimm_sd(void *args)
 	return NULL;
 }
 
+void *worker(void *args)
+{
+	int ret, req;
+	struct timeval s, e;
+	double time;
+	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
+	
+	pcc->sd_response.type = RESPONSE_OK;
+	//TODO: move to rdma.h
+	pcc->sd_response_mr = rdma_buffer_register(pcc->pd, &(pcc->sd_response), sizeof(pcc->sd_response), PERM_L_RW);
+	
+	ret = prepare_request_server(pcc);
+	if(ret) return NULL;
+	ret = prepare_response_server(pcc);
+	if(ret) return NULL;
+
+	struct ibv_wc wc;
+	while(1) {
+		printf("receiving request\n");
+		ret = recv_request(pcc);
+		if(ret) return NULL;
+
+		printf("handling request\n");
+		req = handle_request(&(pcc->sd_request), &(pcc->sd_response));
+		
+		printf("sending reesponse\n");
+		ret = send_response(pcc);
+		if(ret) return NULL;
+
+		printf("prepping next iter\n");
+		ret = prep_next_iter(pcc);
+		if(ret) return NULL;
+
+		if(req == 1) break;
+		pcc->ops++;
+	}
+	return NULL;
+}
+
 void *worker_sd_sd(void *args)
 {
 	int res, sem_val = 0;
@@ -294,11 +408,6 @@ void *worker_sd_sd(void *args)
 			log_err("retrieve_work_completion_events() failed");
 			return NULL;
 		}
-		res = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
-		if(res) {
-			log_err("rdma_post_recv() failed");
-			return NULL;
-		}
 		// check the type of the request
 		req = handle_request(&(pcc->sd_request), &(pcc->sd_response));
 	
@@ -314,6 +423,11 @@ void *worker_sd_sd(void *args)
 		res = rdma_spin_cq(pcc->cq, &wc, 1);
 		if(res != 1) {
 			log_err("retrieve_work_completion_events() failed");
+			return NULL;
+		}
+		res = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
+		if(res) {
+			log_err("rdma_post_recv() failed");
 			return NULL;
 		}
 		debug("Done spinning, moving on\n");

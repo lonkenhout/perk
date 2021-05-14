@@ -226,7 +226,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			} else if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_SD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wr_sd, (void*) pc_conn);
 			} else if(psc->config.client == RDMA_COMBO_SD && psc->config.server == RDMA_COMBO_SD) {
-				pthread_create(&(conns->threads[conn_i]), NULL, worker_sd_sd, (void*) pc_conn);
+				pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
 			} else if(psc->config.client == RDMA_COMBO_WRIMM && psc->config.server == RDMA_COMBO_SD) {
 				pthread_create(&(conns->threads[conn_i]), NULL, worker_wrimm_sd, (void*) pc_conn);
 			} else if(psc->config.client == RDMA_COMBO_WR && psc->config.server == RDMA_COMBO_RD) {
@@ -273,98 +273,6 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	return ret;
 }
 
-void *worker(void *args)
-{
-	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
-	int res, sem_val = 0;
-	char k[MAX_LINE_LEN] = {0,};
-	char v[MAX_LINE_LEN] = {0,};
-	memset(k, 0, sizeof(k));
-	memset(v, 0, sizeof(v));
-
-	struct timeval s, e;
-
-	rdma_write_wr_prepare(&(pcc->wr_wr), &(pcc->wr_sge), pcc->response_mr, pcc->md_attr);
-
-	while(1){
-		char *buf = (char*)pcc->server_buf->addr;
-		res = parse_request(buf, 
-							k, MAX_KEY_SIZE, 
-							v, MAX_VAL_SIZE);
-		if(res == GET) {
-			debug("Get request received: {%s}\n", k);
-			struct ibv_wc wc;
-			/* get request */
-			char *val = pears_kv_get(k);
-			if(val == NULL) {
-				val = "EMPTY";
-			}
-
-			/* clean up and send response */
-			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
-			strcpy((char*)pcc->response_mr->addr, val);
-			/* write to the server */
-			res = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
-			if(res) {
-				log_err("rdma_write_c2s() failed");
-				return NULL;
-			}
-
-			/* wait for completion */
-			debug("Sent result, waiting for completion\n");
-			res = rdma_spin_cq(pcc->cq, &wc, 1);
-			if(res != 1) {
-				log_err("retrieve_work_completion_events() failed");
-				return NULL;
-			}
-			memset(pcc->response_mr->addr, 0 , pcc->response_mr->length);
-			debug("Completed send\n");
-			pcc->ops++;
-		} else if(res == PUT) {
-			debug("Put request received: {%s:%s}\n", k, v);
-			struct ibv_wc wc;
-			/* put request */
-			pears_kv_insert(k, v);
-			
-			/* cleanup and send response */
-			memset(pcc->server_buf->addr, 0, pcc->server_buf->length);
-			strcpy((char*)pcc->response_mr->addr, "INSERTED");
-			res = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
-			if(res) {
-				log_err("rdma_write_c2s() failed");
-				return NULL;
-			}
-
-			/* wait for completion */
-			debug("Sent result, waiting for completion\n");
-			res = rdma_spin_cq(pcc->cq, &wc, 1);
-			if(res != 1) {
-				log_err("retrieve_work_completion_events() failed");
-				return NULL;
-			}
-			memset(pcc->response_mr->addr, 0 , pcc->response_mr->length);
-			pcc->ops++;
-
-		} else if(res == EXIT) {
-			struct ibv_wc wc;
-			strcpy((char*)pcc->response_mr->addr, "OK");
-			
-			res = rdma_post_write_reuse(&(pcc->wr_wr), pcc->qp);
-			if(res) {
-				log_err("rdma_write_c2s() failed");
-				return NULL;
-			}
-			debug("Sent result, waiting for completion\n");
-			res = rdma_spin_cq(pcc->cq, &wc, 1);
-			if(res != 1) {
-				log_err("retrieve_work_completion_events() failed");
-				return NULL;
-			}
-			break;
-		}
-	}
-	return NULL;
-}
 
 void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 {
@@ -392,7 +300,9 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	}
 	//TODO: self-pipe trick so we can intercept ctrl-c and still clean up
 	debug("polling now....\n");
+	printf("starting main loop\n");
 	int clients_connected = 0;
+	int stop = 0;
 	/* first wait for all clients */
 	while(1){
 		n_fds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
@@ -413,24 +323,26 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 					/* decrement clients, if no more are connected, print ops/sec */
 					clients_connected--;
 					if(clients_connected == 0) {
-						get_time(&end);
-						double time = compute_time(start, end, SCALE_MSEC);
-						printf("== processed %d requests in %.0f ms\n",
-								psc->total_ops, time);
-						printf("== ops/s: %.1f\n", psc->total_ops/(time/1000));
+						bm_ops_end(&end);
+						bm_ops_show(psc->total_ops, start, end);
 
 						psc->total_ops = 0;
+						if(PERK_SERVER_EXIT_ON_DC){
+							stop = 1;
+							break;
+						}
 					}
 					debug("disconnect processed successfully\n");
 				} else if(res == POLL_CLIENT_CONNECT_ESTABLISHED){
 					/* as soon as first client connects, start the timer*/
 					clients_connected++;
 					if(clients_connected == 1) {
-						get_time(&start);
+						bm_ops_start(&start);
 					}
 				}
 			}
 		}
+		if(stop) break;
 
     }
     pthread_mutex_destroy(&put_mutex);

@@ -4,6 +4,7 @@
 #include "util.h"
 #include "client.h"
 #include "rdma.h"
+#include "bm.h"
 
 int prep_request(PEARS_CLT_CTX *pcc, struct request *request);
 int validate_request(int req, char *input);

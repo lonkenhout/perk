@@ -8,6 +8,7 @@
 #include "./util.h"
 #include "./rdma.h"
 #include "./workers.h"
+#include "./bm.h"
 
 struct kv_pair {
 	char key[MAX_KEY_SIZE];
@@ -27,7 +28,6 @@ struct kv_pair {
 #define POLL_CLIENT_DISCONNECT_SUCCESS	(2)
 #define POLL_CLIENT_CONNECT_ESTABLISHED (3)
 
-void *worker(void *args);
 
 void pears_kv_init(void);
 void pears_kv_destroy(void);
