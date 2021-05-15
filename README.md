@@ -10,6 +10,7 @@ By configuration, I mean the manner in which requests and responses are handled,
 | WRITE     | - | - | WRITE |
 | WRITE IMM | - | - | SEND  |
 | WRITE     | - | READ | -  |
+
 Here, the \(X\) indicates whether the action required for request/response is performed by the Client or Server.
 
 ## Quick refs
@@ -20,27 +21,41 @@ Here, the \(X\) indicates whether the action required for request/response is pe
 - How to RDMA? [https://www.rdmamojo.com/]()
 
 ## Implementation details
-
+Unwritten stuff
 
 ## Build
 ### Dependencies
+- GLIB2
 #### Install
 - Memcached: [https://memcached.org/downloads]()
 For local installation: `./configure --prefix=/home/$USER/local && make && make install`
 - Libmemcached: [https://launchpad.net/libmemcached/+download]()
 
 #### Configuration
-- `cmake .` for config
-- `make` for compilation and linking
+`cmake .` for config
+`make` for compilation and linking
 
 For extra functionality you can pass in temporary environment variables, currently, there are multiple for benchmarking purposes:
 - `PERK_DEBUG=1`, turns on debugging prints
 - `PERK_BM_LATENCY=1`, turns on latency macros (prints latency client side)
 - `PERK_BM_OPS_PER_SEC=1`, turns on ops/sec macros (prints ops per sec client and server side)
 - `PERK_BM_SERVER_EXIT=1`, server exits after all clients disconnect
+
 How to pass them?
 `PERK_BM_OPS_PER_SEC=1 PERK_BM_SERVER_EXIT=1 cmake .
 make`
+
+
+## Run
+- `python[3] gen_small_workload.py` for generating a small sample workload
+- `bin/pears_server [ARGS]` for running server (-h for help)
+- `bin/pears_client [ARGS]` for running client (-h for help)
+
+Or you can use the run scripts, which supply the executables with a number of default arguments.
+- `./run_server.sh`, try `./run_server.sh -h` for options
+- `./run_client.sh`, try `./run_client.sh -h` for options
+
+Currently, the default options are 5,000,000 requests, using RDMA write/send setup.
 
 ## Run on DAS5
 This section only applies if you have access to one of the DAS5 cluster computers:
@@ -61,14 +76,3 @@ This section only applies if you have access to one of the DAS5 cluster computer
 
 If you want to set the number of requests done, modify `count=5000000` to some other number.
 This number of requests takes roughly 40 seconds.
-
-## Run
-- `python[3] gen_small_workload.py` for generating a small sample workload
-- `bin/pears_server [ARGS]` for running server
-- `bin/pears_client [ARGS]` for running client
-
-Or you can use the run scripts, which supply the executables with a number of default arguments.
-- `./run_server.sh`, try `./run_server.sh -h` for options
-- `./run_client.sh`, try `./run_client.sh -h` for options
-
-Currently, the default options are 5,000,000 requests, using RDMA write/send setup.
