@@ -1,7 +1,7 @@
 # PERK: distributed key-value store using RDMA
 This repo contains the implementation of a distributed key-value store using RDMA.
 Various types of communication primitives are tested in different configurations. 
-By configuration, I mean the manner in which requests and responses are handled, currently the following have been implemented:
+By configuration, I mean the manner in which requests and responses are handled, currently the following have been implemented (or rather, allowed to be run):
 
 | Request \(C\) | Request \(S\) | Response \(C\) | Response \(S\) |
 |-------------|------------|--------------|--------------|
@@ -31,10 +31,14 @@ Unwritten stuff
 - Libmemcached: [https://launchpad.net/libmemcached/+download]()
 
 For installing locally (without sudo), choose installation location:
+
 `./configure --prefix=/home/$USER/local && make && make install`
 
 #### Configuration
+Cmake expects either a globally installed installation (found through regular system variables), or if you have trouble, you can manually set an environment variable: `LIBMEMCACHED_PATH=/home/$USER/libmemcached-1.0.18`, e.g. if you have the source code in your home dir. Then
+
 `cmake .` for config
+
 `make` for compilation and linking
 
 For extra functionality you can pass in temporary environment variables, currently, there are multiple for benchmarking purposes:
