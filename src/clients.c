@@ -47,7 +47,7 @@ int prep_request(PEARS_CLT_CTX *pcc, struct request *request)
 {
 	int req = -1, ret = -1;
 	if(pcc->using_file) {
-		get_input(&(pcc->kvs_request));
+		get_input(&(pcc->kvs_request), MAX_LINES);
 		
 		req = parse_request(pcc->kvs_request, 
 							request->key, MAX_KEY_SIZE,
