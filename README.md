@@ -28,8 +28,10 @@ Unwritten stuff
 - GLIB2
 #### Install
 - Memcached: [https://memcached.org/downloads]()
-For local installation: `./configure --prefix=/home/$USER/local && make && make install`
 - Libmemcached: [https://launchpad.net/libmemcached/+download]()
+
+For installing locally (without sudo), choose installation location:
+`./configure --prefix=/home/$USER/local && make && make install`
 
 #### Configuration
 `cmake .` for config
