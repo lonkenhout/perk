@@ -64,21 +64,19 @@ Or you can use the run scripts, which supply the executables with a number of de
 Currently, the default options are 5,000,000 requests, using RDMA write/send setup.
 
 ## Run on DAS5
-This section only applies if you have access to one of the DAS5 cluster computers:
+This section only applies if you have access to one of the DAS5 clusters:
 - `module load cmake/3.15.4; module load gcc/9.3.0; module load prun`, to make sure the right modules are loaded:
 - `preserve -np 2 -t 900`, to reserve some nodes
 
 ### Server side
 1. `ssh node0..`, to connect to node
 2. `cd bsc-project-rdma`, to cd to folder with runscript
-3. `./run_server.sh`, to run server (no need to add IP, is now extracted from ifconfig), or<br />
-   `./run_server.sh P`, to run server on port P
+3. `./run_server.sh -n -r <comp>`, to run server (-n binds to local node, where it expects a `ib0` infiniband interface), check `./run_server.sh -h` for example comps.
 
 ### Client side
 1. `ssh node0..`, to connect to node
 2. `cd bsc-project-rdma`, to cd to folder with runscript
-3. `./run_client.sh X`, to make client connect to node X (it just substitutes it in the IP address), or <br />
-   `./run_client.sh X P`, to make client connect to node X on port P
+3. `./run_client.sh -n <N> -r <comp>`, where N is the node number (substitutes in a default ib address), check `./run_client.sh -h` for example comps and other options.
 
 If you want to set the number of requests done, modify `count=5000000` to some other number.
 This number of requests takes roughly 40 seconds.
