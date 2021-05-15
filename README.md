@@ -1,14 +1,49 @@
-# bsc-project-rdma
-Bachelor project 2021
+# PERK: distributed key-value store using RDMA
+This repo contains the implementation of a distributed key-value store using RDMA.
+Various types of communication primitives are tested in different configurations. 
+By configuration, I mean the manner in which requests and responses are handled, currently the following have been implemented:
+
+| Request \(C\) | Request \(S\) | Response \(C\) | Response \(S\) |
+|-------------|------------|--------------|--------------|
+| SEND      | - | - | SEND  |
+| WRITE     | - | - | SEND  |
+| WRITE     | - | - | WRITE |
+| WRITE IMM | - | - | SEND  |
+| WRITE     | - | READ | -  |
+Here, the \(X\) indicates whether the action required for request/response is performed by the Client or Server.
+
+## Quick refs
+- Great RDMA example to get started with understanding RDMA implementations: [https://github.com/animeshtrivedi/rdma-example]()
+- How to setup softiwarp if you do not have hardware support for RDMA:
+	- [https://github.com/animeshtrivedi/blog/blob/master/post/2019-06-26-siw.md](), or
+	- [https://www.reflectionsofthevoid.com/2020/07/software-rdma-revisited-setting-up.html]()
+- How to RDMA? [https://www.rdmamojo.com/]()
+
+## Implementation details
 
 
 ## Build
 ### Dependencies
-- Install `memcached`, `libmemcached`
+#### Install
+- Memcached: [https://memcached.org/downloads]()
+For local installation: `./configure --prefix=/home/$USER/local && make && make install`
+- Libmemcached: [https://launchpad.net/libmemcached/+download]()
+
+#### Configuration
 - `cmake .` for config
 - `make` for compilation and linking
 
+For extra functionality you can pass in temporary environment variables, currently, there are multiple for benchmarking purposes:
+- `PERK_DEBUG=1`, turns on debugging prints
+- `PERK_BM_LATENCY=1`, turns on latency macros (prints latency client side)
+- `PERK_BM_OPS_PER_SEC=1`, turns on ops/sec macros (prints ops per sec client and server side)
+- `PERK_BM_SERVER_EXIT=1`, server exits after all clients disconnect
+How to pass them?
+`PERK_BM_OPS_PER_SEC=1 PERK_BM_SERVER_EXIT=1 cmake .
+make`
+
 ## Run on DAS5
+This section only applies if you have access to one of the DAS5 cluster computers:
 - `module load cmake/3.15.4; module load gcc/9.3.0; module load prun`, to make sure the right modules are loaded:
 - `preserve -np 2 -t 900`, to reserve some nodes
 
