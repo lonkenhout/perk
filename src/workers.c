@@ -135,7 +135,9 @@ int send_response(PEARS_CLIENT_CONN *pcc)
 	        if(ret) log_err("rdma_post_send() failed");
 	        
 	        ret = rdma_spin_cq(pcc->cq, &wc, 1);
-	        if(ret != 1) log_err("retrieve_work_completion_events() failed");
+	        if(ret != 1) {
+				log_err("retrieve_work_completion_events() failed, %d", ret);
+			}
 			ret ^= 1;
 			break;
 		case RDMA_COMBO_WR:

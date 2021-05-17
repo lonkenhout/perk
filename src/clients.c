@@ -99,6 +99,7 @@ int recv_response(PEARS_CLT_CTX *pcc)
 				log_err("rdma_poll_cq() failed");
 				exit(1);
 			}
+			pcc->rcv_ps--;
 			break;
 		case RDMA_COMBO_WR:
 			/* WR for request, none for response */

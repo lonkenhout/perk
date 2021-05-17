@@ -66,6 +66,8 @@ typedef struct pears_server_context{
 } PEARS_SVR_CTX;
 
 typedef struct pears_client_context{
+	int rcv_ps;
+
 	struct sockaddr_in			client_sa;
 	
 	struct rdma_event_channel	*cm_ec;

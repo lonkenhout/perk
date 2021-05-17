@@ -549,6 +549,12 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 		if(!pcc->sd_response_mr) {
 			log_err("failed ot register response memory\n");
 		}
+		rdma_recv_wr_prepare(&(pcc->recv_wr), &(pcc->rec_sge), pcc->sd_response_mr);
+		ret = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
+		if(ret) {
+			log_err("rdma_post_recv() failed");
+			return ret;
+		}
 	} else {
 		pcc->sd_response_mr = rdma_buffer_register(pcc->pd, &(pcc->sd_response), sizeof(pcc->sd_response), PERM_R_RW);
 		if(!pcc->sd_response_mr) {
@@ -564,19 +570,6 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 		log_err("rdma_buffer_register() failed");
 		return -ENOMEM;
 	}
-
-
-	/* register region for write from server->client */
-	/*pcc->response_mr = rdma_buffer_register(pcc->pd,
-										  pcc->response,
-										  MAX_LINE_LEN,
-										  PERM_R_RW);
-	if(!pcc->response_mr) {
-		log_err("rdma_buffer_register() failed");
-		return -ENOMEM;
-	}*/
-
-
 
 	/* store request memory in attribute to send to the server for registration */
 	pcc->kvs_request_attr_mr = setup_md_attr(pcc->pd, &(pcc->kvs_request_attr), pcc->sd_response_mr);
