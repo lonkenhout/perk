@@ -17,7 +17,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # setup flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werr -O3 -Ofast -ffast-math -Og -ggdb -funroll-loops -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werr -O3 -Ofast -ffast-math -Og -ggdb -funroll-loops -march=native")
 
 # find and link libs
 find_library(IBVERBS_LIBRARY ibverbs HINTS /home/lot230/local/lib)
@@ -46,7 +46,7 @@ endif()
 
 if($ENV{PERK_DEBUG})
 	message("---- Setting up debugging definitions")
-	add_compile_definitions( PEARS_DEBUG=1 )
+	add_compile_definitions( PERK_DEBUG=1 )
 endif()
 if($ENV{PERK_BM_LATENCY})
 	message("---- Setting up latency benchmarking definitions")
@@ -59,6 +59,10 @@ endif()
 if($ENV{PERK_BM_SERVER_EXIT})
 	message("---- Setting up definitions for server exit after clients disconnect")
 	add_compile_definitions( BM_SERVER_EXIT=1 )
+endif()
+if($ENV{PERK_PRINT_REQUESTS})
+	message("---- Setting up definitions for client side request printing")
+	add_compile_definitions( PERK_PRINT_REQUESTS=1 )
 endif()
 
 # setup thats runs all other setups
