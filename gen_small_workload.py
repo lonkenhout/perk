@@ -17,7 +17,7 @@ def put_gen(key_rg = 3, val_len = 30):
 
 def request_gen(req_amt=1000, distr=0.95, val_len=30):
 	res = []
-	ext_len = 3
+	ext_len = 4
 	GET_num = int(distr * req_amt)
 	get_count = 0
 	put_count = 0
@@ -37,11 +37,10 @@ def main(argv):
 	reqs = int(argv[0])
 	distr = float(argv[1])
 	payload_len = int(argv[2])
-	val_len = payload_len - 9
-	#res = request_gen(reqs, distr, val_len)
+	# val len = total len - len(key) - len(type) - 1 (null byte)
+	val_len = payload_len - 8 - 1 - 1
 
 	f = open(f"/var/scratch/{user}/input_{reqs}_{payload_len}_{int(distr*100)}.in", "w")
-	#f = open(f"input_{reqs}_{payload_len}_{int(distr*100)}.in", "w")
 	if f:
 		for r in request_gen(reqs, distr, val_len):
 			f.write(f'{r}\n')
