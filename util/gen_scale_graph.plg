@@ -1,0 +1,19 @@
+if (!exists("in_file")) in_file='example.dat'
+if (!exists("out_file")) out_file='example_plot.png'
+
+set terminal png
+set output out_file
+
+set format y '%.0f'
+
+set xlabel "Clients"
+set ylabel "Performance (ops/sec)"
+set title "Scalability of various RDMA configurations"
+set xrange [1:16]
+
+plot in_file using 1:2 title 'mcd' lt 7 lc 1 w lp, \
+in_file using 1:3 title 'sd_sd' lt 7 lc 2 w lp, \
+in_file using 1:4 title 'wr_rd' lt 7 lc 3 w lp, \
+in_file using 1:5 title 'wr_sd' lt 7 lc 4 w lp, \
+in_file using 1:6 title 'wr_wr' lt 7 lc 5 w lp, \
+in_file using 1:7 title 'wrimm_sd' lt 7 lc 6 w lp
