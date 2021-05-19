@@ -56,9 +56,7 @@ void handle_request_put(struct request *request, struct request *response)
 {
 	pears_kv_insert(request->key, request->val);
 	//TODO: setup way to properly check for failure
-	if(1) {
-		response->type = RESPONSE_OK;
-	}
+	response->type = RESPONSE_OK;
 }
 
 void handle_request_exit(struct request *request, struct request *response)

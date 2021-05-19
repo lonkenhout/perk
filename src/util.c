@@ -61,10 +61,10 @@ int parse_get_request(char *request,
 
 
 
-int get_line(char *buff, size_t max)
+int get_line(char *buff)
 {
 	int ch, extra, i;
-	if(read(STDIN_FILENO, buff, max) == 0) return EOF;
+	if(read(STDIN_FILENO, buff, MAX_KEY_SIZE + MAX_VAL_SIZE + 10) == 0) return EOF;
 
 	/* If the message was too long, there'll be no newline. In that case we flush
 	 * to EOL so that any excess does not affect the next call. */
@@ -97,13 +97,13 @@ int get_line(char *buff, size_t max)
 	return OK;
 }
 
-int get_file_line(FILE *input_file, char *buff, size_t max)
+int get_file_line(FILE *input_file, char *buff)
 {
 	int ch, extra;
 	char *ret = NULL;
 	int i;
 	//if(read(*input_file, buff, max) == 0) return EOF;
-	ret = fgets(buff, max, input_file);
+	ret = fgets(buff, MAX_KEY_SIZE + MAX_VAL_SIZE + 10, input_file);
 	if(ret == NULL) {
 		return EOF;
 	}
@@ -205,6 +205,45 @@ void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e)
 	double time = compute_time(t_s, t_e, SCALE_MSEC);
 	printf("== processed %ld requests in %.0f msec\n", ops, time);
 	printf("== benchmark [ops_per_sec][%.1f]\n", ops/(time/1000.0));
+}
+
+char *req_type_str(enum REQUEST_TYPE type)
+{
+	char *ret = NULL;
+	switch(type) {
+		case GET:
+			ret = "GET"; break;
+		case PUT:
+			ret = "PUT"; break;
+		case RESPONSE_OK:
+			ret = "RESPONSE_OK"; break;
+		case RESPONSE_EMPTY:
+			ret = "RESPONSE_EMPTY"; break;
+		case RESPONSE_ERR:
+			ret = "RESPONSE_ERR"; break;
+		case EMPTY:
+			ret = "EMPTY"; break;
+		case EXIT:
+			ret = "EXIT"; break;
+		case EXIT_OK:
+			ret = "EXIT_OK"; break;
+		case MALFORMED:
+			ret = "MALFORMED"; break;
+		default:
+			ret = "?"; break;
+	}
+	return ret;
+}
+
+void print_request(struct request req, struct request res)
+{
+	char *rq_tp = req_type_str(req.type);
+	char *rs_tp = req_type_str(res.type);
+	if(req.type == PUT) {
+		printf("[%s] %s:%s ===> [%s]\n", rq_tp, req.key, req.val, rs_tp);
+	} else {
+		printf("[%s] %s ===> [%s] %s\n", rq_tp, req.key, rs_tp, (res.type == RESPONSE_OK)? res.val:"-");
+	}
 }
 
 double compute_time(struct timeval start, struct timeval end, double scale)
