@@ -17,16 +17,16 @@ bm_cpu=0
 bm_ops=0
 bm_scale=0
 bm_latency=0
-in_file="/var/scratch/${USER}/input_5000000_32_95.in"
+in_file="/var/scratch/${USER}/input_1000000_128_95.in"
 o_dir="/var/scratch/${USER}/bm/"
-in_conf="5000000_32_95"
+in_conf="1000000_128_95"
 scale=""
 procs=""
 all=0
 OPTIONS="alocs:i:h"
 LONGOPTS="all,latency,ops-per-sec,cpu-usage,scalability:,input-conf:,help"
 
-count=5000000
+count=1000000
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -41,8 +41,7 @@ while true && [ $# -gt 1 ]; do
 			bm_scale=1
 			bm_ops=1
 			bm_latency=1
-			#scale=(1 2 4 8 16)
-			scale=(16)
+			scale=(1 2 4 8 16)
 			procs=(1 2)
 			all=1
 			shift ;;
@@ -206,12 +205,12 @@ run_clients() {
 	count=$5
 	if [ "$m" == "0" ]; then
 		bm_type=$6
-        echo prun -$num_p -np $num_n -t 1800 ./bin/mcd_client -a $ip -p $ip -c $count
+        echo prun -$num_p -np $num_n -t 1800 ./bin/mcd_client -a $ip -p $port -c $count -i $in_file
         prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n} ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
     else
         comp=$6
 		bm_type=$7
-        echo prun -$num_p -np $num_n -t 1200 ./bin/pears_client -r $comp -a $ip -p $port -c $count
+        echo prun -$num_p -np $num_n -t 1200 ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
         prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n} ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
     fi
 }
@@ -249,6 +248,18 @@ if [ "$bm_scale" == "1" ]; then
             fi
         done
     done
+
+	comp=mcd
+    info "BENCHMARKING MCD OPS/SEC"
+    info "RUNNING MCD SERVER"
+    run_server 0 $node $rid $comp 16
+    for core in "${scale[@]}"
+    do
+        info "Running ops/sec benchmark with $core clients"
+        run_clients 0 $node 1 $core $count bm_scale
+    done
+    info "KILLING MCD SERVER"
+    kill_server 0 $rid
 
 fi
 if [ "$bm_cpu" == "1" ]; then
@@ -307,4 +318,4 @@ if [ "$bm_ops" == "1" ]; then
 fi
 
 info "Cancelling server node reservation"
-echo preserve -c ${rid}
+preserve -c ${rid}
