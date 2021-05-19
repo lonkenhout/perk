@@ -33,11 +33,6 @@ enum RDMA_COMBINATION {
 	RDMA_COMBO_RD,
 };
 
-struct request{
-	enum REQUEST_TYPE type; 
-	char key[MAX_KEY_SIZE];
-	char val[MAX_VAL_SIZE];
-};
 
 struct verb_rdma_config{
 	enum RDMA_COMBINATION		client;
@@ -83,7 +78,7 @@ typedef struct pears_client_context{
 	struct verb_rdma_config		config;
 
 	/* local memory properties */
-	char						*kvs_request;
+	char						*raw_request;
 	struct ibv_mr				*kvs_request_mr;
 	struct rdma_buffer_attr		kvs_request_attr;
 	struct ibv_mr				*kvs_request_attr_mr;
@@ -150,7 +145,7 @@ typedef struct pears_client_conn{
 	struct rdma_buffer_attr		server_rd_md_attr;
 	struct ibv_mr				*server_rd_md_mr;
 
-	struct ibv_mr				*response_mr;
+	//struct ibv_mr				*response_mr;
 	struct ibv_mr				*imm_data;
 	
 	struct ibv_mr				*sd_request_mr;
@@ -180,6 +175,7 @@ typedef struct pears_client_collection{
 
 
 #define MAX_CQ_SIZE (256)
+#define MAX_IMM_SIZE (4)
 
 #define MAX_CLIENT_BACKLOG (8)
 #define MAX_SGE (2)

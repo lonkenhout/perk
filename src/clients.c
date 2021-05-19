@@ -46,13 +46,14 @@ int prepare_response_side(PEARS_CLT_CTX *pcc)
 int prep_request(PEARS_CLT_CTX *pcc, struct request *request)
 {
 	int req = -1, ret = -1;
+	
 	if(pcc->using_file) {
-		get_input(&(pcc->kvs_request), MAX_LINES);
-		
-		req = parse_request(pcc->kvs_request, 
+		get_input(&(pcc->raw_request), MAX_LINES);
+		req = parse_request(pcc->raw_request, 
 							request->key, MAX_KEY_SIZE,
 							request->val, MAX_VAL_SIZE);
-		ret = validate_request(req, pcc->kvs_request);
+		ret = validate_request(req, pcc->raw_request);
+		request->type = req;
 	} else {
 		request->type = GET;
 		strcpy(request->key, "key123");
@@ -109,7 +110,7 @@ int recv_response(PEARS_CLT_CTX *pcc)
 				exit(1);
 			}
 			/* spin on memory instead */
-			while(pcc->sd_response.type == EMPTY);
+			while(!(pcc->sd_response.type == RESPONSE_OK || pcc->sd_response.type == RESPONSE_EMPTY || pcc->sd_response.type == EXIT_OK));
 			break;
 		case RDMA_COMBO_RD:
 			/* WR for request */
@@ -173,7 +174,7 @@ int client(PEARS_CLT_CTX *pcc)
 	struct timeval end, t_s, t_e;
 	struct ibv_wc wc;
 
-	//TODO: put these in RMDA.h
+	printf("somewhere here\n");
 	ret = prepare_request_side(pcc);
 	if(ret) return ret;
 
@@ -185,21 +186,19 @@ int client(PEARS_CLT_CTX *pcc)
 	/* do the same request max_reqs times */
 	while(count < pcc->max_reqs) {
 		bm_latency_start(&start);
-		//printf("prepping request\n");
+
 		ret = prep_request(pcc, &(pcc->sd_request));
 		if(ret) {
 			fprintf(stderr, "error, request couldnt be sent\n");
 			exit(1);
 		}
-		//printf("snd request\n");
+
 		if(send_request(pcc)) return 1;
-		//printf("rcv rsp\n");
 		if(recv_response(pcc)) return 1;
-		debug("Waiting for completion \n");
 		count++;
 		bm_latency_end(&end);
 		bm_latency_show("sd_sd", start, end);
-
+		print_req(pcc->sd_request, pcc->sd_response);
 		if(prep_next_iter(pcc)) return 1;
 	}
 	bm_ops_start(&t_e);

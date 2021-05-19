@@ -83,9 +83,9 @@ int get_input(char **dest, int lines) {
 	for(i = 0; i < lines; ++i) {
 		debug("Requesting input line from file or stdin [%d/%d]\n", i+1, lines);
 		if(pcc->using_file) {
-			ret = get_file_line(pcc->f_ptr, dest[i], MAX_LINE_LEN);
+			ret = get_file_line(pcc->f_ptr, dest[i]);
 		} else {
-			ret = get_line(dest[i], MAX_LINE_LEN);
+			ret = get_line(dest[i]);
 		}
 		if(ret == TOO_LONG) {
 			log_err("input line was too long");
@@ -114,16 +114,13 @@ int main(int argc, char **argv){
 	svr_sa.sin_port = 20838;
 
 	pcc = (PEARS_CLT_CTX *)calloc(1, sizeof(*pcc));
-	pcc->kvs_request = (char *)calloc(MAX_LINE_LEN, sizeof(char));
-	pcc->response = (char *)calloc(MAX_LINE_LEN, sizeof(char));
 	pcc->f_ptr = NULL;
 	pcc->using_file = 0;
 	pcc->max_reqs = 1000000;
+	pcc->raw_request = calloc(1, MAX_KEY_SIZE + MAX_VAL_SIZE + 50);
 
 	pcc->config.client = default_client_rdma_config;
 	pcc->config.client = default_server_rdma_config;
-
-	//strcpy(pcc->kvs_request,"placeholder");
 
 	parse_opts(argc, argv);
 
@@ -151,21 +148,20 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 
+	printf("Maximum payload size %ld\n", sizeof(struct request));
 	ret = client(pcc);
 	if(ret) {
 		log_err("client() failed");
 		goto clean_exit;
 	}
 	
-
-	//sleep(2);
 	ret = client_disconnect(pcc);
 	if(ret) {
 
 		log_err("disconnect failed");
 		goto clean_exit;
 	}
-	free(pcc->kvs_request);
+	free(pcc->raw_request);
 	free(pcc->response);
 	if(pcc->using_file) {
 		fclose(pcc->f_ptr);
@@ -176,7 +172,7 @@ int main(int argc, char **argv){
 	return 0;
 
 clean_exit:
-	free(pcc->kvs_request);
+	free(pcc->raw_request);
 	free(pcc->response);
 	if(pcc->using_file) {
 		fclose(pcc->f_ptr);

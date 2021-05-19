@@ -124,9 +124,6 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 	pc_conn->qp = pc_conn->cm_cid->qp;
 	debug("queue pair created\n");
 
-	pc_conn->response_mr = rdma_buffer_alloc(pc_conn->pd,
-											MAX_LINE_LEN,
-											PERM_R_RW);
 	if(pc_conn->config.server == RDMA_COMBO_SD) {
 		pc_conn->sd_response_mr = rdma_buffer_register(pc_conn->pd,
 														&(pc_conn->sd_response),
@@ -244,7 +241,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 
 	/* prepost a recv for write with IMM/send */
 	//TODO: setup up better system to check if this is necessary
-	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_LINE_LEN, PERM_L_RW);
+	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_IMM_SIZE, PERM_L_RW);
 	if(pc_conn->config.client == RDMA_COMBO_WRIMM){
 		ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
 		if(ret) {
@@ -264,7 +261,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 
 	//TODO: remove this code
 	/* setup attributes to send to client*/
-	pc_conn->server_rd_md_mr = setup_md_attr(pc_conn->pd, &(pc_conn->server_rd_md_attr), pc_conn->response_mr);
+	pc_conn->server_rd_md_mr = setup_md_attr(pc_conn->pd, &(pc_conn->server_rd_md_attr), pc_conn->sd_response_mr);
 	if(!pc_conn->server_rd_md_mr) {
 			log_err("rdma_buffer_register() failed");
 			        return -ENOMEM;
@@ -305,7 +302,7 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	}
 
 	if(pc_conn->server_buf != NULL) rdma_buffer_free(pc_conn->server_buf);
-	if(pc_conn->response_mr != NULL)rdma_buffer_free(pc_conn->response_mr);
+	//if(pc_conn->response_mr != NULL)rdma_buffer_free(pc_conn->response_mr);
 	if(pc_conn->imm_data != NULL)rdma_buffer_free(pc_conn->imm_data);
 	if(pc_conn->md != NULL) rdma_buffer_deregister(pc_conn->md);
 	if(pc_conn->server_md != NULL) rdma_buffer_deregister(pc_conn->server_md);
@@ -561,14 +558,6 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 			log_err("failed ot register response memory\n");
 		}
 		
-	}
-	pcc->kvs_request_mr = rdma_buffer_register(pcc->pd,
-											   pcc->kvs_request,
-											   MAX_LINE_LEN,
-											   PERM_R_RW);
-	if(!pcc->kvs_request_mr) {
-		log_err("rdma_buffer_register() failed");
-		return -ENOMEM;
 	}
 
 	/* store request memory in attribute to send to the server for registration */

@@ -1,5 +1,5 @@
-#ifndef __PEARS_UTIL_H__
-#define __PEARS_UTIL_H__
+#ifndef __PERK_UTIL_H__
+#define __PERK_UTIL_H__
 
 
 #include <getopt.h>
@@ -15,15 +15,12 @@
 #include <sys/time.h>
 #include <time.h>
 #include <pthread.h>
-//#include <netinet/in.h>
-//#include <sys/socket.h>
 
 #include <rdma/rdma_cma.h>
 #include <infiniband/verbs.h>
 
-//#define PEARS_DEBUG 1
 
-enum REQUEST_TYPE {
+enum __attribute__ ((__packed__)) REQUEST_TYPE {
 	GET,
 	PUT,
 	RESPONSE_OK,
@@ -35,6 +32,7 @@ enum REQUEST_TYPE {
 	MALFORMED
 };
 
+
 #define SCALE_SEC	(1.0)
 #define SCALE_MSEC	(1000.0)
 #define SCALE_MCSEC	(1000000.0)
@@ -45,11 +43,15 @@ enum REQUEST_TYPE {
 /* max expected request length and max number of requests
  * sent 
  */
-#define MAX_KEY_SIZE (20)
-#define MAX_VAL_SIZE (129)
-#define MAX_REQUEST_LEN (MAX_KEY_SIZE+MAX_VAL_SIZE+3)
-#define MAX_LINE_LEN (MAX_KEY_SIZE+MAX_VAL_SIZE+3)
+#define MAX_KEY_SIZE (8)
+#define MAX_VAL_SIZE (21)
 #define MAX_LINES (1)
+
+struct request{
+	enum REQUEST_TYPE type; 
+	char key[MAX_KEY_SIZE];
+	char val[MAX_VAL_SIZE];
+};
 
 /* debugging macros */
 #define get_errno() (errno == 0 ? "None" : strerror(errno))
@@ -58,12 +60,11 @@ enum REQUEST_TYPE {
 				__FILE__, __LINE__, __func__, errno, get_errno(), ##__VA_ARGS__)
 
 
-#ifdef PEARS_DEBUG
+#ifdef PERK_DEBUG
 #define debug(msg, ...) fprintf(stdout, "[DEBUG] " msg, ##__VA_ARGS__);
 #else
 #define debug(msg, ...)
 #endif
-
 
 
 
@@ -77,8 +78,8 @@ int parse_request(char *request,
 				char *v, size_t v_sz);
 
 
-int get_line(char *buff, size_t max);
-int get_file_line(FILE *input_file, char *buff, size_t max);
+int get_line(char *buff);
+int get_file_line(FILE *input_file, char *buff);
 
 int get_addr(char *dst, struct sockaddr *addr);
 int get_addr_port(char *res, struct sockaddr *addr);
@@ -87,8 +88,18 @@ int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
 void get_time(struct timeval *t);
 void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e);
 void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e);
+
+char *req_type_str(enum REQUEST_TYPE type);
+void print_request(struct request req, struct request res);
 double compute_time(struct timeval start, struct timeval end, double scale);
 void print_curr_time(void);
+
+#ifdef PERK_PRINT_REQUESTS
+#define print_req(req, res) print_request(req, res);
+#else
+#define print_req(req, res)
+#endif
+
 #endif
 
 
