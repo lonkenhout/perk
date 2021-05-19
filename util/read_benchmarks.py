@@ -4,6 +4,14 @@ from os.path import isfile, join
 from statistics import mean
 import re
 
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+import plotly.express as px
+
+#sns.set_theme(style='ticks')
+
 comps = ['sd_sd', 'wr_sd', 'wr_wr', 'wrimm_sd', 'wr_rd', 'mcd']
 bm_types = ['']
 
@@ -31,11 +39,14 @@ def get_avg_lat(l_f):
 	return mean(lats)
 
 def read_lat(path, files):
+	res = []
 	for f in files:
 		dat = get_fn_info(f)
 		lat_mean = get_avg_lat(join(path, f))
+		#res.append()
 		print(f'Mean latency for {dat["comp"]}: {lat_mean} usec with {dat["reqs"]} iter, {dat["distr"]}%% GETs, and payload size {dat["payload_size"]}')
-	
+	#return res	
+
 def get_ops(o_f):
 	ops = 0.0
 	with open(o_f) as f:
@@ -46,18 +57,66 @@ def get_ops(o_f):
 
 def read_scale(path, files):
 	results = {'sd_sd': None, 'wr_sd': None, 'wr_wr': None, 'wrimm_sd': None, 'wr_rd': None, 'mcd': None}
+	nps = []
+	szs = []
+	cfgs = []
 	for f in files:
 		dat = get_fn_info(f)
-		if results[dat['comp']] == None:
-			results[dat['comp']] = {'cores': {}}
-		if dat['cores'] not in results[dat['comp']]['cores']:
-			results[dat['comp']]['cores'][dat['cores']] = 0.0
-		ops = get_ops(join(path, f))
-		results[dat['comp']]['cores'][dat['cores']] += ops
-	
-	print(results)
+		cfg = dat['comp']
+		if cfg not in cfgs:
+			cfgs.append(cfg)
+		np = dat['cores']
+		if int(np) not in nps and int(np) < 32:
+			nps.append(int(np))
+		sz = dat['payload_size']
+		if sz not in szs:
+			szs.append(sz)
 
-	
+		if results[cfg] == None:
+			results[cfg] = {'size': {}}
+		if sz not in results[cfg]['size']:
+			results[cfg]['size'][sz] = {'cores': {}}
+		if np not in results[cfg]['size'][sz]['cores']:
+			results[cfg]['size'][sz]['cores'][np] = 0.0
+		ops = get_ops(join(path, f))
+		results[cfg]['size'][sz]['cores'][np] += ops
+
+	cfgs.sort()
+	nps.sort()
+
+	dfs = []
+
+	for sz in szs:
+		rows = []
+		for np in nps:
+			row = []
+			for k in cfgs:
+				row.append(results[k]['size'][sz]['cores'][str(np)])
+			rows.append(row)
+		df = pd.DataFrame(data=rows, index=nps, columns=cfgs)
+		dfs.append(df)
+
+	for i in range(len(dfs)):
+		print(f'Plotting scalability for payload size {szs[i]}')
+		plot_scale(dfs[i], f'Scalability of PERK for payload size {szs[i]}', out_file=f'scale_{szs[i]}.png')
+
+def plot_scale(df, title, out_file=None):
+	cols = ['red','blue','green','yellow','black','cyan','purple']
+	ax = sns.lineplot(data=df, palette='Set3', linewidth=2.0, markers=True, dashes=False)
+
+	ax.set(xlim = (0,16))
+	ax.set(ylim = (0, 4500000))
+	ax.set_title(title)
+
+	plt.xlabel('Clients')
+	plt.ylabel('Performance (ops/sec)')
+	#store it in a file
+	if out_file != None:
+		fig = ax.get_figure()
+		fig.savefig(f'{out_file}', dpi=400)
+
+	plt.clf()
+
 
 def main(argv):
 	path = argv[1]
