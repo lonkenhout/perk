@@ -20,10 +20,20 @@ def get_fn_info(filename):
 	dat['comp'] = [c for c in comps if c in filename][0]
 	m = re.search('(?<=\.)\d+_\d+_\d+(?=\.)', filename)
 	cores = re.search('(?<=\.)\d+_\d+(?=\.)', filename)
+	run = re.search('(?<=\.)r\d+(?=\.)', filename)
 	if cores != None:
 		cores = cores.group(0)
 		spl = cores.split('_')
 		dat['cores'] = str(int(spl[0]) * int(spl[1]))
+	else:
+		cores = re.search('(?<=\.)\d+(?=\.r\d+)', filename)
+		if cores != None:
+			cores = cores.group(0)
+			dat['cores'] = cores
+
+	if run != None:
+		run = run.group(0)
+		dat['run'] = run
 	info = m.group(0).split('_')
 	dat['reqs'] = info[0]
 	dat['payload_size'] = info[1]
@@ -58,24 +68,30 @@ def read_lat(path, files):
 		if results[cfg] == None:
 			results[cfg] = {'size' : {}}
 		if sz not in results[cfg]['size']:
-			results[cfg]['size'][sz] = lat_mean #int(sz) #lat_mean
+			results[cfg]['size'][sz] = []
+		results[cfg]['size'][sz] += [lat_mean] #int(sz) #lat_mean
 
+	print(results)
 	cfgs.sort()
 	
 	rows = []
 	for sz in szs:
 		row = []
 		for k in cfgs:
-			row.append(results[k]['size'][sz])
+			row.append(mean(results[k]['size'][sz]))
 		rows.append(row)
 	df = pd.DataFrame(data=rows, index=szs, columns=cfgs)
 
 	plot_lat(df, f'Latency of PERK for various payload sizes compared with Memcached', out_file=f'lat_{len(szs)}.png')
 
-def get_ops(o_f):
+def get_ops(o_f, mcd_check = False):
 	ops = 0.0
 	with open(o_f) as f:
 		for line in f.readlines():
+			if mcd_check and 'processed' in line:
+				total = int(line.split(' ')[2])
+				if total % 3000000 != 0:
+					break
 			if '== benchmark' in line:
 				ops += float(line.split('[')[2].split(']')[0])
 	return ops
@@ -85,27 +101,51 @@ def read_scale(path, files):
 	nps = []
 	szs = []
 	cfgs = []
+	runs = []
 	for f in files:
 		dat = get_fn_info(f)
 		cfg = dat['comp']
-		if cfg not in cfgs:
-			cfgs.append(cfg)
-		np = dat['cores']
-		if int(np) not in nps and int(np) < 32:
-			nps.append(int(np))
-		sz = dat['payload_size']
-		if sz not in szs:
-			szs.append(sz)
+		if cfg != 'mcd' and 's_bm_scale' in f:
+			if cfg not in cfgs:
+				cfgs.append(cfg)
+			np = dat['cores']
+			if int(np) not in nps and int(np) < 32:
+				nps.append(int(np))
+			sz = dat['payload_size']
+			if sz not in szs:
+				szs.append(sz)
+			run = dat['run']
+			if run not in runs:
+				runs.append(run)
 
-		if results[cfg] == None:
-			results[cfg] = {'size': {}}
-		if sz not in results[cfg]['size']:
-			results[cfg]['size'][sz] = {'cores': {}}
-		if np not in results[cfg]['size'][sz]['cores']:
-			results[cfg]['size'][sz]['cores'][np] = 0.0
-		ops = get_ops(join(path, f))
-		results[cfg]['size'][sz]['cores'][np] += ops
+			if results[cfg] == None:
+				results[cfg] = {'size': {}}
+			if sz not in results[cfg]['size']:
+				results[cfg]['size'][sz] = {'cores': {}}
+			if np not in results[cfg]['size'][sz]['cores']:
+				results[cfg]['size'][sz]['cores'][np] = []
+			ops = get_ops(join(path, f))
+			results[cfg]['size'][sz]['cores'][np] += [ops]
+		elif cfg == 'mcd' and not 's_bm_scale' in f:
+			if cfg not in cfgs:
+				cfgs.append(cfg)
+			np = dat['cores']
+			if int(np) not in nps and int(np) < 32:
+				nps.append(int(np))
+			sz = dat['payload_size']
+			if sz not in szs:
+				szs.append(sz)
 
+			if results[cfg] == None:
+				results[cfg] = {'size': {}}
+			if sz not in results[cfg]['size']:
+				results[cfg]['size'][sz] = {'cores': {}}
+			if np not in results[cfg]['size'][sz]['cores']:
+				results[cfg]['size'][sz]['cores'][np] = []
+			ops = get_ops(join(path, f), True)
+			if ops > 0.0:
+				results[cfg]['size'][sz]['cores'][np] += [ops]
+			
 	cfgs.sort()
 	nps.sort()
 	dfs = []
@@ -115,7 +155,7 @@ def read_scale(path, files):
 		for np in nps:
 			row = []
 			for k in cfgs:
-				row.append(results[k]['size'][sz]['cores'][str(np)])
+				row.append(mean(results[k]['size'][sz]['cores'][str(np)]))
 			rows.append(row)
 		df = pd.DataFrame(data=rows, index=nps, columns=cfgs)
 		dfs.append(df)
@@ -151,20 +191,18 @@ def read_cpu(path, files):
 		if results[cfg] == None:
 			results[cfg] = {'size': {}}
 		if sz not in results[cfg]['size']:
-			results[cfg]['size'][sz] = {'cores': {}}
-		results[cfg]['size'][sz] = get_cpu(join(path, f))
+			results[cfg]['size'][sz] = []
+		results[cfg]['size'][sz] += [get_cpu(join(path, f))]
 		
+	print(results)
 	cfgs.sort()
 
 	rows = []
 	for sz in szs:
 		for k in cfgs:
-			rows.append([k, sz, results[k]['size'][sz]])
+			rows.append([k, sz, mean(results[k]['size'][sz])])
 	df = pd.DataFrame(data=rows, columns=['type','size', 'cpu'])
 	print(df)
-	#df = sns.load_dataset("penguins")
-	#print(df.head())
-	#print(df)
 	plot_cpu(df, f'CPU cycles consumed by PERK for given payload size', out_file=f'cpu_{len(szs)}.png')
 
 def plot_scale(df, title, out_file=None):
@@ -178,7 +216,8 @@ def plot_scale(df, title, out_file=None):
 	plt.ylabel('Performance (ops/sec)')
 	#store it in a file
 	if out_file != None:
-		sg.savefig(f'{out_file}', dpi=400)
+		f = sg.get_figure()
+		f.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
 
 	plt.clf()
 
@@ -193,12 +232,13 @@ def plot_lat(df, title, out_file=None):
 	plt.ylabel('Latency (usec)')
 	#store it in a file
 	if out_file != None:
-		sg.savefig(f'{out_file}', dpi=400)
+		f = sg.get_figure()
+		f.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
 
 	plt.clf()
 
 def plot_cpu(df, title, out_file=None):
-	sg = sns.catplot(data=df, kind='bar', x='size', y='cpu', hue='type', ci='sd', palette='dark', alpha=.6)
+	sg = sns.catplot(data=df, kind='bar', x='size', y='cpu', hue='type', ci='sd', alpha=.6)
 
 	#ax.set_title(title)
 	#plt.xlabel('Configuration')
@@ -207,7 +247,7 @@ def plot_cpu(df, title, out_file=None):
 	sg.legend.set_title('Title')
 
 	if out_file != None:
-		sg.savefig(f'{out_file}', dpi=400)
+		sg.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
 
 	plt.clf()
 	
@@ -216,15 +256,15 @@ def main(argv):
 	path = argv[1]
 	files = [f for f in listdir(path) if isfile(join(path, f))]
 
-	bm_scale = [f for f in files if 'cl_bm_scale' in f]
+	bm_scale = [f for f in files if 'bm_scale' in f]
 	bm_ops_gen = [f for f in files if 's_bm_ops_gen' in f]
 	bm_lat = [f for f in files if 'cl_bm_lat' in f]
 	bm_cpu = [f for f in files if 'cpu' in f]
 
 	#print(bm_cpu)
 	read_cpu(path, bm_cpu)
-	#read_lat(path, bm_lat)
-	#read_scale(path, bm_scale)
+	read_lat(path, bm_lat)
+	read_scale(path, bm_scale)
 	
 
 if __name__ == "__main__":
