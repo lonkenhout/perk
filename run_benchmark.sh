@@ -229,7 +229,7 @@ run_clients() {
 
 comps=(sd_sd wr_sd wr_wr wr_rd wrimm_sd)
 
-for i in $(seq 3 $rerun); do
+for i in $(seq 1 $rerun); do
 	# reserve a node for the server
 	info "RESERVING NODE FOR SERVER, RUN $i"
 	rid="$(reserve_server_node)"
