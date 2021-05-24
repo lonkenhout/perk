@@ -17,7 +17,7 @@ def put_gen(key_rg = 3, val_len = 30):
 
 def request_gen(req_amt=1000, distr=0.95, val_len=30):
 	res = []
-	ext_len = 4
+	ext_len = 3
 	GET_num = int(distr * req_amt)
 	get_count = 0
 	put_count = 0
