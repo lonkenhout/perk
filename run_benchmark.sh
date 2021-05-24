@@ -17,16 +17,17 @@ bm_cpu=0
 bm_ops=0
 bm_scale=0
 bm_latency=0
-in_file="/var/scratch/${USER}/input_1000000_128_95.in"
+in_file="/var/scratch/${USER}/input_3000000_256_95.in"
 o_dir="/var/scratch/${USER}/bm/"
-in_conf="1000000_128_95"
+in_conf="3000000_256_95"
 scale=""
 procs=""
+reruns=1
 all=0
-OPTIONS="alocs:i:h"
-LONGOPTS="all,latency,ops-per-sec,cpu-usage,scalability:,input-conf:,help"
+OPTIONS="alocs:r:i:h"
+LONGOPTS="all,latency,ops-per-sec,cpu-usage,scalability:,rerun:,input-conf:,help"
 
-count=1000000
+count=3000000
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -73,6 +74,9 @@ while true && [ $# -gt 1 ]; do
 				bm_scale=1
 				IFS=',' read -ra scale <<< "$2"
             fi
+			shift 2 ;;
+		-r|--rerun)
+			rerun=$2
 			shift 2 ;;
 		-i|--input-conf)
 			in_conf=$2
@@ -146,8 +150,9 @@ run_server() {
 		comp=$4
 		cores=$5
 		bm_type=$6
+		run=$7
 		echo "prun -reserve $rid -np 1 ./bin/pears_server -r $comp -a $ip -p $port"
-		prun -reserve $rid -np 1 -o ${o_dir}s_${bm_type}.${rid}.${comp}.${in_conf}.${cores} ./bin/pears_server -r $comp -a $ip -p $port &
+		prun -reserve $rid -np 1 -o ${o_dir}s_${bm_type}.${rid}.${comp}.${in_conf}.${cores}.r$run ./bin/pears_server -r $comp -a $ip -p $port &
 	fi
 }
 
@@ -157,14 +162,16 @@ run_server_perf() {
     rid=$3
     port=20838
     if [ "$m" == "0" ]; then
+		run=$4
         echo "prun -reserve $rid -np 1 memcached -d -u $USER -l $ip -p 20838 -t 16"
-        prun -reserve $rid -np 1 -o ${o_dir}s_cpu.${rid}.mcd.${in_conf}.${cores} perf stat memcached -u $USER -l $ip -p $port -t 16 &
+        prun -reserve $rid -np 1 -o ${o_dir}s_cpu.${rid}.mcd.${in_conf}.${cores}.r$run perf stat memcached -u $USER -l $ip -p $port -t 16 &
     else
         comp=$4
         cores=$5
         bm_type=$6
+		run=$7
         echo "prun -reserve $rid -np 1 ./bin/pears_server -r $comp -a $ip -p $port"
-        prun -reserve $rid -np 1 -o ${o_dir}s_cpu.${rid}.${comp}.${in_conf}.${cores} perf stat ./bin/pears_server -r $comp -a $ip -p $port &
+        prun -reserve $rid -np 1 -o ${o_dir}s_cpu.${rid}.${comp}.${in_conf}.${cores}.r$run perf stat ./bin/pears_server -r $comp -a $ip -p $port &
     fi
 }
 
@@ -176,19 +183,22 @@ run_clients_perf() {
     num_n=$4
     count=$5
     if [ "$m" == "0" ]; then
+		run=$6
         echo prun -$num_p -np $num_n ./bin/mcd_client -a $ip -p $ip -c $count
-        prun -$num_p -np $num_n -o ${o_dir}cl_cpu.mcd.${in_conf}.${num_p}_${num_n} perf stat ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
+        prun -$num_p -np $num_n -o ${o_dir}cl_cpu.mcd.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
     else
         comp=$6
+		run=$7
         echo prun -$num_p -np $num_n ./bin/pears_client -r $comp -a $ip -p $port -c $count
-        prun -$num_p -np $num_n -o ${o_dir}cl_cpu.${in_conf}.${comp}.${num_p}_${num_n} perf stat ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
+        prun -$num_p -np $num_n -o ${o_dir}cl_cpu.${in_conf}.${comp}.${num_p}_${num_n}.r$run perf stat ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
     fi
 }
 
 kill_server() {
 	rid=$2
 	if [ "$1" == "0" ]; then
-		prun -reserve $rid -np 1 pkill -f memcached >/dev/null
+		#prun -reserve $rid -np 1 pkill -f memcached >/dev/null
+        prun -reserve $rid -np 1 python3 util/kill_server.py memcached
 	elif [ "$1" == "2" ]; then
         prun -reserve $rid -np 1 python3 util/kill_server.py memcachedp
 	else
@@ -205,117 +215,124 @@ run_clients() {
 	count=$5
 	if [ "$m" == "0" ]; then
 		bm_type=$6
+		run=$7
         echo prun -$num_p -np $num_n -t 1800 ./bin/mcd_client -a $ip -p $port -c $count -i $in_file
-        prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n} ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
+        prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n}.r$run ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
     else
         comp=$6
 		bm_type=$7
+		run=$8
         echo prun -$num_p -np $num_n -t 1200 ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
-        prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n} ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
+        prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n}.r$run ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
     fi
 }
 
-# reserve a node for the server
-info "RESERVING NODE FOR SERVER"
-rid="$(reserve_server_node)"
-node="$(get_node_num)"
 comps=(sd_sd wr_sd wr_wr wr_rd wrimm_sd)
-echo "acquired node, reservation id: ${rid}, node ${node}"
 
-if [ "$bm_scale" == "1" ]; then
-	info "PREPARING BENCHMARKS"
-	PERK_BM_SERVER_EXIT=1 PERK_BM_OPS_PER_SEC=1 cmake .
-	make
-	
-	info "BENCHMARKING PERK OPS/SEC"
-    for comp in "${comps[@]}"
-    do
-        for core in "${scale[@]}"
-        do
-            if [ "$core" == "1000000" ]; then
-                for proc in "${procs[@]}"
-                do
-                    info "RUNNING PERK SERVER"
-                    run_server 1 $node $rid $comp $core bm_scale
-                    info "Running ops/sec benchmark with ${core}*${proc} clients"
-                    run_clients 1 $node $proc $core $count $comp bm_scale
-                done
-            else
-                info "RUNNING PERK SERVER"
-                run_server 1 $node $rid $comp $core bm_scale
-                info "Running ops/sec benchmark with $core clients"
-                run_clients 1 $node 1 $core $count $comp bm_scale
-            fi
-        done
-    done
+for i in $(seq 3 $rerun); do
+	# reserve a node for the server
+	info "RESERVING NODE FOR SERVER, RUN $i"
+	rid="$(reserve_server_node)"
+	node="$(get_node_num)"
+	echo "acquired node, reservation id: ${rid}, node ${node}"
+	if [ "$bm_scale" == "1" ]; then
+		info "PREPARING BENCHMARKS"
+		PERK_BM_SERVER_EXIT=1 PERK_BM_OPS_PER_SEC=1 cmake .
+		make
+		
+		info "BENCHMARKING PERK OPS/SEC"
+		for comp in "${comps[@]}"
+		do
+			for core in "${scale[@]}"
+			do
+				if [ "$core" == "1000000" ]; then
+					for proc in "${procs[@]}"
+					do
+						info "RUNNING PERK SERVER"
+						run_server 1 $node $rid $comp $core bm_scale $i
+						info "Running ops/sec benchmark with ${core}*${proc} clients"
+						run_clients 1 $node $proc $core $count $comp bm_scale $i
+					done
+				else
+					info "RUNNING PERK SERVER"
+					run_server 1 $node $rid $comp $core bm_scale $i
+					info "Running ops/sec benchmark with $core clients"
+					run_clients 1 $node 1 $core $count $comp bm_scale $i
+				fi
+			done
+		done
 
-	comp=mcd
-    info "BENCHMARKING MCD OPS/SEC"
-    info "RUNNING MCD SERVER"
-    run_server 0 $node $rid $comp 16
-    for core in "${scale[@]}"
-    do
-        info "Running ops/sec benchmark with $core clients"
-        run_clients 0 $node 1 $core $count bm_scale
-    done
-    info "KILLING MCD SERVER"
-    kill_server 0 $rid
+		comp=mcd
+		info "BENCHMARKING MCD OPS/SEC"
+		info "RUNNING MCD SERVER"
+		run_server 0 $node $rid $comp 16 $i
+		for core in "${scale[@]}"
+		do
+			info "Running ops/sec benchmark with $core clients"
+			run_clients 0 $node 1 $core $count bm_scale $i
+		done
+		info "KILLING MCD SERVER"
+		kill_server 0 $rid
 
-fi
-if [ "$bm_cpu" == "1" ]; then
-	info "PREPARING CPU BENCHMARK"
-	PERK_BM_SERVER_EXIT=1 cmake .
-	make
-	info "BENCHMARKING CPU USAGE PERK"
-	for comp in "${comps[@]}"
-    do
-		info "RUNNING PERK SERVER"
-		run_server_perf 1 $node $rid $comp 1 bm_cpu
-		info "RUNNING PERK CLIENT"
-        run_clients_perf 1 $node 1 1 $count $comp bm_cpu
-	done
-	info "RUNNING MCD SERVER"
-	run_server_perf 0 $node $rid bm_cpu
-	info "RUNNING MCD CLIENT"
-	run_clients_perf 0 $node 1 1 $count bm_cpu
-	kill_server 2 $rid
-fi
-if [ "$bm_latency" == "1" ]; then
-	info "PREPARING LATENCY BENCHMARK"
-	PERK_BM_SERVER_EXIT=1 PERK_BM_LATENCY=1 cmake .
-	make
-	info "BENCHMARKING PERK LATENCY"
-	for comp in "${comps[@]}"
-	do
-		info "RUNNING PERK SERVER"
-		run_server 1 $node $rid $comp 1 bm_lat
-		info "RUNNING PERK CLIENT"
-		run_clients 1 $node 1 1 $count $comp bm_lat
-	done
-	info "RUNNING MCD SERVER"
-	run_server 0 $node $rid bm_lat
-	info "RUNNING MCD CLIENT"
-	run_clients 0 $node 1 1 $count bm_lat
-	kill_server 0 $rid
-fi
-if [ "$bm_ops" == "1" ]; then
-	info "PREPARING GENERIC OPS/SEC BENCHMARK"
-	PERK_BM_SERVER_EXIT=1 PERK_BM_OPS_PER_SEC=1 cmake .
-	make
-	info "BENCHMARKING PERK LATENCY"
-    for comp in "${comps[@]}"
-    do
-        info "RUNNING PERK SERVER"
-        run_server 1 $node $rid $comp 1 bm_ops_gen
-        info "RUNNING PERK CLIENT"
-        run_clients 1 $node 1 1 $count $comp bm_ops_gen
-    done
-    info "RUNNING MCD SERVER"
-    run_server 0 $node $rid bm_ops_gen
-    info "RUNNING MCD CLIENT"
-    run_clients 0 $node 1 1 $count bm_ops_gen
-    kill_server 0 $rid
-fi
+	fi
+	if [ "$bm_cpu" == "1" ]; then
+		info "PREPARING CPU BENCHMARK"
+		PERK_BM_SERVER_EXIT=1 cmake .
+		make
+		info "BENCHMARKING CPU USAGE PERK"
+		for comp in "${comps[@]}"
+		do
+			info "RUNNING PERK SERVER"
+			run_server_perf 1 $node $rid $comp 1 bm_cpu $i
+			info "RUNNING PERK CLIENT"
+			run_clients_perf 1 $node 1 1 $count $comp bm_cpu $i
+		done
+		info "RUNNING MCD SERVER"
+		run_server_perf 0 $node $rid bm_cpu $i
+		info "RUNNING MCD CLIENT"
+		run_clients_perf 0 $node 1 1 $count bm_cpu $i
+		kill_server 2 $rid
+	fi
+	if [ "$bm_latency" == "1" ]; then
+		info "PREPARING LATENCY BENCHMARK"
+		PERK_BM_SERVER_EXIT=1 PERK_BM_LATENCY=1 cmake .
+		make
+		info "BENCHMARKING PERK LATENCY"
+		for comp in "${comps[@]}"
+		do
+			info "RUNNING PERK SERVER"
+			run_server 1 $node $rid $comp 1 bm_lat $i
+			info "RUNNING PERK CLIENT"
+			run_clients 1 $node 1 1 $count $comp bm_lat $i
+		done
+		info "RUNNING MCD SERVER"
+		run_server 0 $node $rid bm_lat $i
+		info "RUNNING MCD CLIENT"
+		run_clients 0 $node 1 1 $count bm_lat $i
+		kill_server 0 $rid
+	fi
+	if [ "$bm_ops" == "1" ]; then
+		info "PREPARING GENERIC OPS/SEC BENCHMARK"
+		PERK_BM_SERVER_EXIT=1 PERK_BM_OPS_PER_SEC=1 cmake .
+		make
+		info "BENCHMARKING PERK LATENCY"
+		for comp in "${comps[@]}"
+		do
+			info "RUNNING PERK SERVER"
+			run_server 1 $node $rid $comp 1 bm_ops_gen $i
+			info "RUNNING PERK CLIENT"
+			run_clients 1 $node 1 1 $count $comp bm_ops_gen $i
+		done
+		info "RUNNING MCD SERVER"
+		run_server 0 $node $rid bm_ops_gen $i
+		info "RUNNING MCD CLIENT"
+		run_clients 0 $node 1 1 $count bm_ops_gen $i
+		kill_server 0 $rid
+	fi
+	info "Cancelling server node reservation"
+	preserve -c ${rid}
+	rid=""
+	node=""
+	sleep 2
+done
 
-info "Cancelling server node reservation"
-preserve -c ${rid}
