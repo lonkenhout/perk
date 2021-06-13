@@ -1,6 +1,6 @@
 #include "workers.h"
 
-int handle_request(PEARS_CLIENT_CONN *pcc, struct request *request, struct request *response)
+int handle_request(PERK_CLIENT_CONN *pcc, struct request *request, struct request *response)
 {
 	/* if the client reads the result from server memory, it should be stored in the request memory */
 	switch(pcc->config.server) {
@@ -14,11 +14,11 @@ int handle_request(PEARS_CLIENT_CONN *pcc, struct request *request, struct reque
 	switch(request->type) {
 		case GET:
 			debug("Doing get request\n");
-			handle_request_get(request, response);
+			handle_request_get(pcc, request, response);
 			break;
 		case PUT:
 			debug("Doing put request\n");
-			handle_request_put(request, response);
+			handle_request_put(pcc, request, response);
 			break;
 		case EXIT:
 			debug("Doing exit request\n");
@@ -39,22 +39,25 @@ int handle_request(PEARS_CLIENT_CONN *pcc, struct request *request, struct reque
 	return ret;
 }
 
-void handle_request_get(struct request *request, struct request *response)
+void handle_request_get(PERK_CLIENT_CONN *pcc, struct request *request, struct request *response)
 {
 	
-	char *val = pears_kv_get(request->key);
-	if(val == NULL) {
+	//char *val = pears_kv_get(request->key);
+	//int ret = pears_kv_get(request->key, response->val);
+	int ret = ck_hash_table_get(pcc->ct, request->key, response->val);
+	if(ret) {
 		response->type = RESPONSE_EMPTY;
 	} else {
 		if(request != response) strcpy(response->key, request->key);
-		strcpy(response->val, val);
+		//strcpy(response->val, val);
 		response->type = RESPONSE_OK;
 	}
 }
 
-void handle_request_put(struct request *request, struct request *response)
+void handle_request_put(PERK_CLIENT_CONN *pcc, struct request *request, struct request *response)
 {
-	pears_kv_insert(request->key, request->val);
+	//pears_kv_insert(request->key, request->val);
+	ck_hash_table_insert(pcc->ct, request->key, request->val);
 	//TODO: setup way to properly check for failure
 	response->type = RESPONSE_OK;
 }
@@ -64,7 +67,7 @@ void handle_request_exit(struct request *request, struct request *response)
 	response->type = EXIT_OK;
 }
 
-int prepare_response_server(PEARS_CLIENT_CONN *pcc)
+int prepare_response_server(PERK_CLIENT_CONN *pcc)
 {
 	int ret = 0;
 	switch(pcc->config.server) {
@@ -79,7 +82,7 @@ int prepare_response_server(PEARS_CLIENT_CONN *pcc)
 	return ret;
 }
 
-int prepare_request_server(PEARS_CLIENT_CONN *pcc)
+int prepare_request_server(PERK_CLIENT_CONN *pcc)
 {
 	int ret = 0;
 	switch(pcc->config.client) {
@@ -97,7 +100,7 @@ int prepare_request_server(PEARS_CLIENT_CONN *pcc)
 	return ret;
 }
 
-int recv_request(PEARS_CLIENT_CONN *pcc)
+int recv_request(PERK_CLIENT_CONN *pcc)
 {
 	int ret = -1;
 	struct ibv_wc wc;
@@ -116,7 +119,7 @@ int recv_request(PEARS_CLIENT_CONN *pcc)
 	return ret;
 }
 
-int send_response(PEARS_CLIENT_CONN *pcc)
+int send_response(PERK_CLIENT_CONN *pcc)
 {
 	int ret = -1;
 	struct ibv_wc wc;
@@ -154,7 +157,7 @@ int send_response(PEARS_CLIENT_CONN *pcc)
 	return ret;
 }
 
-int prep_next_iter(PEARS_CLIENT_CONN *pcc)
+int prep_next_iter(PERK_CLIENT_CONN *pcc)
 {
 	int ret = -1;
 	switch(pcc->config.client) {
@@ -180,29 +183,32 @@ void *worker(void *args)
 	int ret, req;
 	struct timeval s, e;
 	double time;
-	PEARS_CLIENT_CONN *pcc = (PEARS_CLIENT_CONN *)args;
+	PERK_CLIENT_CONN *pcc = (PERK_CLIENT_CONN *)args;
 	
 	pcc->sd_response.type = RESPONSE_OK;
+	pcc->sd_request.type = EMPTY;
 	
 	ret = prepare_request_server(pcc);
 	if(ret) return NULL;
 	ret = prepare_response_server(pcc);
 	if(ret) return NULL;
 
+
 	struct ibv_wc wc;
+	uint64_t last_rid = -1;
 	while(1) {
-		//printf("receiving request\n");
 		ret = recv_request(pcc);
 		if(ret) return NULL;
-
-		//printf("handling request\n");
+		if(last_rid == pcc->sd_request.rid) {
+			//printf("exceeded it here (%lu): %d:%s %d:%s\n", last_rid, pcc->sd_request.type, pcc->sd_request.key, pcc->sd_response.type, pcc->sd_response.key);
+			continue;
+		}
+		last_rid = pcc->sd_request.rid;
 		req = handle_request(pcc, &(pcc->sd_request), &(pcc->sd_response));
 		
-		//printf("sending reesponse\n");
 		ret = send_response(pcc);
 		if(ret) return NULL;
 
-		//printf("prepping next iter\n");
 		ret = prep_next_iter(pcc);
 		if(ret) return NULL;
 		
