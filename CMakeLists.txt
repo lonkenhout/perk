@@ -64,9 +64,14 @@ if($ENV{PERK_PRINT_REQUESTS})
 	message("---- Setting up definitions for client side request printing")
 	add_compile_definitions( PERK_PRINT_REQUESTS=1 )
 endif()
+if($ENV{PERK_OVERRIDE_VALSIZE})
+    message("---- Setting up definitions for client side request printing")
+    add_compile_definitions( PERK_OVERRIDE_VALSIZE=$ENV{PERK_OVERRIDE_VALSIZE} )
+	message("---- Set val size to: $ENV{PERK_OVERRIDE_VALSIZE}")
+endif()
 
 # setup thats runs all other setups
-add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c ${PROJECT_SOURCE_DIR}/workers.c)
+add_executable(pears_server ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server.c ${PROJECT_SOURCE_DIR}/workers.c ${PROJECT_SOURCE_DIR}/ck_hash.c)
 add_executable(pears_client ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/client.c ${PROJECT_SOURCE_DIR}/clients.c)
 
 #add_executable(pears_server_bm ${PROJECT_SOURCE_DIR}/util.c ${PROJECT_SOURCE_DIR}/rdma.c ${PROJECT_SOURCE_DIR}/server_bm.c ${PROJECT_SOURCE_DIR}/workers_bm.c)
