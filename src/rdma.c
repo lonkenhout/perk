@@ -27,7 +27,7 @@ struct ibv_context *init_ibv_dev(char *dev_name)
  * Server functions
  *
  **/
-int init_server_dev(PEARS_SVR_CTX *psc)
+int init_server_dev(PERK_SVR_CTX *psc)
 {
 	if(psc == NULL) {
 		log_err("cant create server context");
@@ -71,7 +71,7 @@ int init_server_dev(PEARS_SVR_CTX *psc)
 	return 0;
 }
 
-int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
+int init_server_client_resources(PERK_CLIENT_CONN *pc_conn)
 {
 	int ret = -1;
 	if(!pc_conn->cm_cid) {
@@ -139,7 +139,7 @@ int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn)
 }
 
 
-int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+int accept_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 {
 	struct rdma_conn_param 	conn_par;
 	struct ibv_recv_wr		recv_wr, *bad_recv_wr = NULL;
@@ -183,7 +183,7 @@ int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	return 0;
 }
 
-int finalize_client_conn(PEARS_CLIENT_CONN *pc_conn)
+int finalize_client_conn(PERK_CLIENT_CONN *pc_conn)
 {	
 	memcpy(&(pc_conn->client_sa),
 			rdma_get_peer_addr(pc_conn->cm_cid),
@@ -195,7 +195,7 @@ int finalize_client_conn(PEARS_CLIENT_CONN *pc_conn)
 	return 0;
 }
 
-int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
+int send_md_s2c(PERK_CLIENT_CONN *pc_conn)
 {
 	struct ibv_send_wr		send_wr, *bad_send_wr = NULL;
 	struct ibv_wc 			wc;
@@ -281,7 +281,7 @@ int send_md_s2c(PEARS_CLIENT_CONN *pc_conn)
 	return 0;
 }
 
-int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+int disconnect_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 {
 	int ret = -1;
 
@@ -318,7 +318,7 @@ int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	return 0;
 }
 
-int destroy_server_dev(PEARS_SVR_CTX *psc)
+int destroy_server_dev(PERK_SVR_CTX *psc)
 {
 	
 	//TODO: free any QP and ACK all related events before this function call
@@ -330,7 +330,7 @@ int destroy_server_dev(PEARS_SVR_CTX *psc)
 	rdma_destroy_event_channel(psc->cm_ec);
 }
 
-int client_coll_find_free(PEARS_CLIENT_COLL *conns)
+int client_coll_find_free(PERK_CLIENT_COLL *conns)
 {
 	int i;
 	for(i = 0; i < MAX_CLIENTS; ++i) {
@@ -339,7 +339,7 @@ int client_coll_find_free(PEARS_CLIENT_COLL *conns)
 	return i;
 }
 
-int client_coll_find_conn(PEARS_CLIENT_COLL *conns, struct sockaddr *addr)
+int client_coll_find_conn(PERK_CLIENT_COLL *conns, struct sockaddr *addr)
 {
 	int i;
 	for(i = 0; i < MAX_CLIENTS; ++i) {
@@ -354,7 +354,7 @@ int client_coll_find_conn(PEARS_CLIENT_COLL *conns, struct sockaddr *addr)
  * Client functions
  *
  **/
-int init_client_dev(PEARS_CLT_CTX *pcc, struct sockaddr_in *svr_sa)
+int init_client_dev(PERK_CLT_CTX *pcc, struct sockaddr_in *svr_sa)
 {
 	struct rdma_cm_event *cme = NULL;
 	int ret = -1;
@@ -445,7 +445,7 @@ int init_client_dev(PEARS_CLT_CTX *pcc, struct sockaddr_in *svr_sa)
 	return 0;
 }
 
-int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
+int client_pre_post_recv_buffer(PERK_CLT_CTX *pcc)
 {
 	struct ibv_recv_wr 	rec_wr;
 	struct ibv_recv_wr	*bad_rec_wr = NULL;
@@ -488,7 +488,7 @@ int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc)
 	return 0;
 }
 
-int connect_to_server(PEARS_CLT_CTX *pcc)
+int connect_to_server(PERK_CLT_CTX *pcc)
 {
 	struct rdma_conn_param conn_param;
 	struct rdma_cm_event *cme = NULL;
@@ -521,7 +521,7 @@ int connect_to_server(PEARS_CLT_CTX *pcc)
 	return 0;
 }
 
-int send_md_c2s(PEARS_CLT_CTX *pcc)
+int send_md_c2s(PERK_CLT_CTX *pcc)
 {
 	struct ibv_send_wr 	snd_wr;
 	struct ibv_send_wr	*bad_snd_wr = NULL;
@@ -586,16 +586,13 @@ int send_md_c2s(PEARS_CLT_CTX *pcc)
 		return ret;
 	}
 
-	
-
-	//pcc->server_md_attr
 
 	debug("Server buffer location and credentials received\n");
 	return 0;
 }
 
 
-int client_disconnect(PEARS_CLT_CTX *pcc)
+int client_disconnect(PERK_CLT_CTX *pcc)
 {
 	struct rdma_cm_event *cme = NULL;
 	int ret = -1;

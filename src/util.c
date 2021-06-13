@@ -200,6 +200,12 @@ void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e)
 	printf("== benchmark [latency:%s][%.4f usec]\n", msg, time);
 }
 
+void print_time_diff_nano(char *msg, struct timeval t_s, struct timeval t_e)
+{
+	double time = compute_time(t_s, t_e, SCALE_NSEC);
+	printf("== benchmark [latency:%s][%.4f usec]\n", msg, time);
+}
+
 void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e)
 {
 	double time = compute_time(t_s, t_e, SCALE_MSEC);

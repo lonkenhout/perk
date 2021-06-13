@@ -1,5 +1,5 @@
-#ifndef __PEARS_BENCHMARK_H__
-#define __PEARS_BENCHMARK_H__
+#ifndef __PERK_BENCHMARK_H__
+#define __PERK_BENCHMARK_H__
 
 /* definitions created by cmake for choosing benchmarks */
 /* for making server exit after all clients disconnect */

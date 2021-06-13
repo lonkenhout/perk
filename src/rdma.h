@@ -1,7 +1,7 @@
 /* Server header */
 
-#ifndef __PEARS_RDMA_H__
-#define __PEARS_RDMA_H__
+#ifndef __PERK_RDMA_H__
+#define __PERK_RDMA_H__
 
 #include "./util.h"
 
@@ -43,7 +43,7 @@ struct verb_rdma_config{
 static enum RDMA_COMBINATION default_client_rdma_config = RDMA_COMBO_WR;
 static enum RDMA_COMBINATION default_server_rdma_config = RDMA_COMBO_SD;
 
-typedef struct pears_server_context{
+typedef struct perk_server_context{
 	struct sockaddr_in			server_sa;
 	
 	struct rdma_event_channel	*cm_ec;
@@ -58,10 +58,11 @@ typedef struct pears_server_context{
 	struct verb_rdma_config		config;
 	
 	uint32_t			total_ops;
-} PEARS_SVR_CTX;
+} PERK_SVR_CTX;
 
-typedef struct pears_client_context{
+typedef struct perk_client_context{
 	int rcv_ps;
+	uint32_t cid;
 
 	struct sockaddr_in			client_sa;
 	
@@ -118,13 +119,14 @@ typedef struct pears_client_context{
 	FILE 						*f_ptr;
 	int 						using_file;
 	int 						max_reqs;
-} PEARS_CLT_CTX;
+} PERK_CLT_CTX;
 
-typedef struct pears_client_conn{
+typedef struct perk_client_conn{
 	struct sockaddr_in			client_sa;
 	struct sockaddr				*addr;
 	struct rdma_cm_id			*cm_cid;
 
+	struct ck_hash_table		*ct;
 	uint32_t					ops;
 
 	struct ibv_pd				*pd;
@@ -145,7 +147,6 @@ typedef struct pears_client_conn{
 	struct rdma_buffer_attr		server_rd_md_attr;
 	struct ibv_mr				*server_rd_md_mr;
 
-	//struct ibv_mr				*response_mr;
 	struct ibv_mr				*imm_data;
 	
 	struct ibv_mr				*sd_request_mr;
@@ -162,15 +163,15 @@ typedef struct pears_client_conn{
 	struct ibv_send_wr			send_wr;
 	struct ibv_send_wr 			wr_wr;
 	struct ibv_send_wr			rd_wr;
-} PEARS_CLIENT_CONN;
+} PERK_CLIENT_CONN;
 
 #define MAX_CLIENTS (32)
-typedef struct pears_client_collection{
+typedef struct perk_client_collection{
 	int 					active[MAX_CLIENTS];
 	int 					established[MAX_CLIENTS];
-	PEARS_CLIENT_CONN 		clients[MAX_CLIENTS];
+	PERK_CLIENT_CONN 		clients[MAX_CLIENTS];
 	pthread_t				threads[MAX_CLIENTS];
-} PEARS_CLIENT_COLL;
+} PERK_CLIENT_COLL;
 
 
 
@@ -192,26 +193,26 @@ typedef struct pears_client_collection{
 #define PERM_RA_RW (IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC)
 
 /* server side functions */
-int init_server_dev(PEARS_SVR_CTX *psc);
-int wait_for_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
-int init_server_client_resources(PEARS_CLIENT_CONN *pc_conn);
-int accept_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
-int finalize_client_conn(PEARS_CLIENT_CONN *pc_conn);
-int disconnect_client_conn(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn);
-int destroy_server_dev(PEARS_SVR_CTX *psc);
-int send_md_s2c(PEARS_CLIENT_CONN *pc_conn);
+int init_server_dev(PERK_SVR_CTX *psc);
+int wait_for_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn);
+int init_server_client_resources(PERK_CLIENT_CONN *pc_conn);
+int accept_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn);
+int finalize_client_conn(PERK_CLIENT_CONN *pc_conn);
+int disconnect_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn);
+int destroy_server_dev(PERK_SVR_CTX *psc);
+int send_md_s2c(PERK_CLIENT_CONN *pc_conn);
 
-int client_coll_find_free(PEARS_CLIENT_COLL *conns);
-int client_coll_find_conn(PEARS_CLIENT_COLL *conns, struct sockaddr *addr);
+int client_coll_find_free(PERK_CLIENT_COLL *conns);
+int client_coll_find_conn(PERK_CLIENT_COLL *conns, struct sockaddr *addr);
 
 /* client side functions */
-int init_client_dev(PEARS_CLT_CTX *pcc, struct sockaddr_in *svr_sa);
-int client_pre_post_recv_buffer(PEARS_CLT_CTX *pcc);
-int connect_to_server(PEARS_CLT_CTX *pcc);
-int send_md_c2s(PEARS_CLT_CTX *pcc);
-int rdma_write_c2s(PEARS_CLT_CTX *pcc);
-int rdma_write_c2s_non_block(PEARS_CLT_CTX *pcc);
-int client_disconnect(PEARS_CLT_CTX *pcc);
+int init_client_dev(PERK_CLT_CTX *pcc, struct sockaddr_in *svr_sa);
+int client_pre_post_recv_buffer(PERK_CLT_CTX *pcc);
+int connect_to_server(PERK_CLT_CTX *pcc);
+int send_md_c2s(PERK_CLT_CTX *pcc);
+int rdma_write_c2s(PERK_CLT_CTX *pcc);
+int rdma_write_c2s_non_block(PERK_CLT_CTX *pcc);
+int client_disconnect(PERK_CLT_CTX *pcc);
 
 /* shared functions */
 void qp_init_attr_prepare(struct ibv_qp_init_attr *qp_attr, struct ibv_cq *cq);

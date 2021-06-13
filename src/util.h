@@ -21,6 +21,7 @@
 
 
 enum __attribute__ ((__packed__)) REQUEST_TYPE {
+	NOTHING = 0,
 	GET,
 	PUT,
 	RESPONSE_OK,
@@ -36,6 +37,7 @@ enum __attribute__ ((__packed__)) REQUEST_TYPE {
 #define SCALE_SEC	(1.0)
 #define SCALE_MSEC	(1000.0)
 #define SCALE_MCSEC	(1000000.0)
+#define SCALE_NSEC	(1000000000.0)
 
 #define OK (1)
 #define TOO_LONG (2)
@@ -44,10 +46,18 @@ enum __attribute__ ((__packed__)) REQUEST_TYPE {
  * sent 
  */
 #define MAX_KEY_SIZE (8)
-#define MAX_VAL_SIZE (21)
+
+#ifdef PERK_OVERRIDE_VALSIZE
+#define MAX_VAL_SIZE (PERK_OVERRIDE_VALSIZE)
+
+#else
+#define MAX_VAL_SIZE (23)//+32+64+128+256+512+1024)
+#endif
+
 #define MAX_LINES (1)
 
 struct request{
+	uint64_t rid;
 	enum REQUEST_TYPE type; 
 	char key[MAX_KEY_SIZE];
 	char val[MAX_VAL_SIZE];
