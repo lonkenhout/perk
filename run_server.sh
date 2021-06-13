@@ -109,13 +109,6 @@ if [ "$comp" != "mcd" ]; then
 else
 	echo "Starting memcached on $ip:$port on behalf of $USER with $max_threads threads"
 	memcached -u $USER -l $ip -p $port -t $max_threads
-
-	# find process id and make sure memcached is terminated after timeout T
-	#ps_list=`ps aux`
-	#ps_mcd=`echo "$ps_list" | grep "memcached" | awk 'FNR == 1 {print $2}'`
-	#if [ $T > 0 ]; then
-	#	(sleep $T; kill $ps_mcd) &
-	#fi
 fi
 
 

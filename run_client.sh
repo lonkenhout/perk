@@ -8,8 +8,8 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
     exit 1
 fi
 
-OPTIONS="a:p:i:c:r:n:bh"
-LONGOPTS="addr:,port:,infile:,count:,rdma-comp:,node:,benchmark,help"
+OPTIONS="a:p:ui:c:r:n:bh"
+LONGOPTS="addr:,port:,use-id,infile:,count:,rdma-comp:,node:,benchmark,help"
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -18,6 +18,7 @@ fi
 eval set -- "$PARSED"
 
 ip=127.0.0.1
+use_id=""
 port=20838
 count=5000000
 infile="none"
@@ -42,6 +43,9 @@ while true && [ $# -gt 1 ]; do
 		-p|--port)
 			port=$2
 			shift 2 ;;
+		-u|--use-id)
+			use_id=-u
+			shift ;;
 		-i|--infile)
 			infile=$2
 			shift 2 ;;
@@ -107,7 +111,7 @@ exit 0
 fi
 
 if [ "$comp" != "mcd" ]; then
-	$exe -r $comp -a $ip -p $port -i $infile -c $count
+	$exe -r $comp -a $ip -p $port $use_id -i $infile -c $count
 else
-	$exe -a $ip -p $port -i $infile -c $count
+	$exe -a $ip -p $port $use_id -i $infile -c $count
 fi
