@@ -3,7 +3,9 @@
 #include "./client.h"
 
 
-static PEARS_CLT_CTX *pcc = NULL;
+static PERK_CLT_CTX *pcc = NULL;
+static int use_id_based_file = 0;
+static char *file_name = NULL;
 
 /* usage */
 void print_usage(char *cmd){
@@ -11,10 +13,20 @@ void print_usage(char *cmd){
 	printf("\t%s -a [IP] -p [PORT] [-i [INPUT_FILE]]\n", cmd);
 }
 
+static void open_file(char *file)
+{
+	pcc->f_ptr = fopen(file, "r");
+	if(!pcc->f_ptr) {
+		fprintf(stderr, "Failed to open: %s\n", file);
+	} else {
+		pcc->using_file = 1;
+	}
+}
+
 /* parse options */
 int parse_opts(int argc, char **argv){
 	int ret = 0, option;
-	while((option = getopt(argc, argv, "a:p:i:c:r:")) != -1){
+	while((option = getopt(argc, argv, "a:p:ui:c:r:")) != -1){
 		switch(option){
 			case 'a':
 				ret = get_addr(optarg, (struct sockaddr*) &(pcc->client_sa));
@@ -28,18 +40,15 @@ int parse_opts(int argc, char **argv){
 				pcc->client_sa.sin_port = htons(strtol(optarg, NULL, 0));
 				debug("SET port to %s\n", optarg);
 				break;
+			case 'u':
+				use_id_based_file = 1;
+				break;
 			case 'i':
 				debug("opening %s\n", optarg);
-				pcc->f_ptr = fopen(optarg, "r");
-				if(!pcc->f_ptr) {
-					//log_err("opening file failed, using default instead");
-					printf("opening file failed, using default request instead\n");
-				} else {
-					pcc->using_file = 1;
-				}
+				file_name = optarg;
 				break;
 			case 'c':
-				pcc->max_reqs = strtol(optarg, NULL, 0);
+				pcc->max_reqs = strtol(optarg, NULL, 10);
 				debug("SET max requests to %ld requests\n", pcc->max_reqs);
 				break;
 			case 'r':
@@ -99,9 +108,17 @@ int get_input(char **dest, int lines) {
 	return total;
 }
 
+/* extract cid from programname */
+void get_cid(char *prog_name) {
+	char *curr = strtok(prog_name, ".");
+	if(!curr) return;
+	curr = strtok(NULL, ".");
+	if(!curr) return;
+	pcc->cid = strtoul(curr, NULL, 10);
+}
 
 int main(int argc, char **argv){
-	printf("Started client\n");
+
 	int ret = -1;
 	if(argc < 2){
 		print_usage(argv[0]);
@@ -113,7 +130,7 @@ int main(int argc, char **argv){
 	svr_sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	svr_sa.sin_port = 20838;
 
-	pcc = (PEARS_CLT_CTX *)calloc(1, sizeof(*pcc));
+	pcc = (PERK_CLT_CTX *)calloc(1, sizeof(*pcc));
 	pcc->f_ptr = NULL;
 	pcc->using_file = 0;
 	pcc->max_reqs = 1000000;
@@ -148,7 +165,14 @@ int main(int argc, char **argv){
 		goto clean_exit;
 	}
 
-	printf("Maximum payload size %ld\n", sizeof(struct request));
+	if(use_id_based_file) {
+		get_cid(argv[0]);
+		char final_file[100] = {0,};
+		snprintf(final_file, sizeof(final_file), file_name, pcc->cid);
+		open_file(final_file);
+	} else if(file_name) {
+		open_file(file_name);
+	}
 	ret = client(pcc);
 	if(ret) {
 		log_err("client() failed");

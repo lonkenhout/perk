@@ -1,5 +1,5 @@
-#ifndef __PEARS_CLIENT_H__
-#define __PEARS_CLIENT_H__
+#ifndef __PERK_CLIENT_H__
+#define __PERK_CLIENT_H__
 
 /* standard includes */
 #include <stdio.h>

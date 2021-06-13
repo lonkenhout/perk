@@ -12,6 +12,9 @@
 
 static FILE *f_ptr = NULL;
 static int using_file = 0;
+static int use_id_based_file = 0;
+static uint32_t cid;
+static char *file_name = NULL;
 static int max_reqs = 1000000;
 
 static char *ip = NULL;
@@ -23,10 +26,20 @@ void print_usage(char *cmd){
         printf("\t%s -a [IP] -p [PORT] [-i [INPUT_FILE]]\n", cmd);
 }
 
+static void open_file(char *file)
+{
+    f_ptr = fopen(file, "r");
+    if(!f_ptr) {
+        fprintf(stderr, "Failed to open: %s\n", file);
+    } else {
+        using_file = 1;
+    }
+}
+
 /* parse options */
 int parse_opts(int argc, char **argv){
         int ret = 0, option;
-        while((option = getopt(argc, argv, "a:p:i:c:")) != -1){
+        while((option = getopt(argc, argv, "a:p:ui:c:")) != -1){
                 switch(option){
                         case 'a':
 				ip = optarg;
@@ -36,18 +49,15 @@ int parse_opts(int argc, char **argv){
                                 port = optarg;
                                 debug("port set to %s\n", optarg);
                                 break;
+						case 'u':
+							use_id_based_file = 1;
+							break;
                         case 'i':
                                 debug("opening %s\n", optarg);
-                                f_ptr = fopen(optarg, "r");
-                                if(!f_ptr) {
-                                        //log_err("opening file failed, using default instead");
-                                        printf("opening file failed, using default request instead\n");
-                                } else {
-                                        using_file = 1;
-                                }
+								file_name = optarg;
                                 break;
                         case 'c':
-                                max_reqs = strtol(optarg, NULL, 0);
+                                max_reqs = strtol(optarg, NULL, 10);
                                 debug("doing %d requests\n", max_reqs);
                                 break;
                         default:
@@ -122,6 +132,15 @@ int prep_request(char *request, char *key, char *val)
 	return ret;
 }
 
+/* extract cid from programname */
+void get_cid(char *prog_name) {
+    char *curr = strtok(prog_name, ".");
+    if(!curr) return;
+    curr = strtok(NULL, ".");
+    if(!curr) return;
+    cid = strtoul(curr, NULL, 10);
+}
+
 
 int main(int argc, char **argv) {
  	memcached_st *memc;
@@ -134,6 +153,15 @@ int main(int argc, char **argv) {
 
 	if(parse_opts(argc, argv)) {
 		exit(1);
+	}
+
+	if(use_id_based_file) {
+        get_cid(argv[0]);
+        char final_file[100] = {0,};
+        snprintf(final_file, sizeof(final_file), file_name, cid);
+        open_file(final_file);
+    } else if(file_name) {
+		open_file(file_name);
 	}
 
 	/* timing */
@@ -151,21 +179,26 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 	printf("Connected successfully to memcached server on %s:%s\n", ip, port);
+	fflush(stdout);
 
 	/* start timer for ops/sec */
 	bm_ops_start(&o_s);
 	int i = 0, req = 0;
+	size_t ret_value_len;
+	char *ret_value = NULL;
 	while(i < max_reqs) {
 		bm_latency_start(&l_s);
 		req = prep_request(request, key, value);
 		key_length = strlen(key);
 		switch(req) {
 			case GET:
-				rc = memcached_mget(memc, (const char * const*)&key, &key_length, 1);
-				if(rc != MEMCACHED_SUCCESS) {
-					fprintf(stderr, "memcached_mget() failed\n");
+				//rc = memcached_mget(memc, (const char * const*)&key, &key_length, 1);
+				ret_value = memcached_get(memc, key, key_length, &ret_value_len, NULL, &rc);
+				if(rc != MEMCACHED_SUCCESS && rc != MEMCACHED_NOTFOUND) {
+					fprintf(stderr, "memcached_mget() failed: %s\n", memcached_strerror(memc, rc));
 				}
-				char ret_key[MEMCACHED_MAX_KEY];
+				free(ret_value);
+				/*char ret_key[MEMCACHED_MAX_KEY];
 				memset(ret_key, 0, sizeof(ret_key));
 				size_t ret_key_len;
 				char *ret_value;
@@ -178,7 +211,7 @@ int main(int argc, char **argv) {
 					bm_latency_show("mcd", l_s, l_e);
 					free(ret_value);
 					memset(ret_key, 0, sizeof(ret_key));
-				}
+				}*/
 				break;
 			default:
 				rc = memcached_set(memc, key, key_length, value, strlen(value), 0, 0);
