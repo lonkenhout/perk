@@ -50,11 +50,14 @@ def get_avg_lat(l_f):
 	return mean(lats)
 
 def read_lat(path, files):
-	results = {'sd_sd': None, 'wr_sd': None, 'wr_wr': None, 'wrimm_sd': None, 'wr_rd': None, 'mcd': None}
+	results = {'mcd' : None, 'sd_sd' : None, 'wr_rd' : None, 'wr_sd' : None, 'wr_wr' : None, 'wrimm_sd' : None}
 	szs = []
 	cfgs = []
+
+	rows = []
 	for f in files:
 		dat = get_fn_info(f)
+		print(f)
 		lat_mean = get_avg_lat(join(path, f))
 		#lat_mean = 0
 		cfg = dat['comp']
@@ -69,20 +72,21 @@ def read_lat(path, files):
 			results[cfg] = {'size' : {}}
 		if sz not in results[cfg]['size']:
 			results[cfg]['size'][sz] = []
-		results[cfg]['size'][sz] += [lat_mean] #int(sz) #lat_mean
+		#results[cfg]['size'][sz] += [lat_mean] #int(sz) #lat_mean
+		rows.append([int(sz), cfg, lat_mean])
 
 	print(results)
 	cfgs.sort()
 	
-	rows = []
-	for sz in szs:
-		row = []
-		for k in cfgs:
-			row.append(mean(results[k]['size'][sz]))
-		rows.append(row)
-	df = pd.DataFrame(data=rows, index=szs, columns=cfgs)
+	#rows = []
+	#for sz in szs:
+	#	for k in cfgs:
+	#		rows.append([int(sz), k, mean(results[k]['size'][sz])])
+	df = pd.DataFrame(data=rows, columns=['size','type','latency'])
+	sorted_df = df.sort_values(['size','type'], axis=0)	
 
-	plot_lat(df, f'Latency of PERK for various payload sizes compared with Memcached', out_file=f'lat_{len(szs)}.png')
+
+	plot_lat(sorted_df, f'Latency of PERK for various payload sizes compared with Memcached', out_file=f'lat_{len(szs)}.svg')
 
 def get_ops(o_f, mcd_check = False):
 	ops = 0.0
@@ -97,7 +101,7 @@ def get_ops(o_f, mcd_check = False):
 	return ops
 
 def read_scale(path, files):
-	results = {'sd_sd': None, 'wr_sd': None, 'wr_wr': None, 'wrimm_sd': None, 'wr_rd': None, 'mcd': None}
+	results = {'mcd' : None, 'sd_sd' : None, 'wr_rd' : None, 'wr_sd' : None, 'wr_wr' : None, 'wrimm_sd' : None}
 	nps = []
 	szs = []
 	cfgs = []
@@ -149,26 +153,29 @@ def read_scale(path, files):
 	cfgs.sort()
 	nps.sort()
 	dfs = []
-
+	
 	for sz in szs:
 		rows = []
 		for np in nps:
-			row = []
+			#row = []
 			for k in cfgs:
-				row.append(mean(results[k]['size'][sz]['cores'][str(np)]))
-			rows.append(row)
-		df = pd.DataFrame(data=rows, index=nps, columns=cfgs)
+				for r in results[k]['size'][sz]['cores'][str(np)]:
+					rows.append([k, np, r])
+		df = pd.DataFrame(data=rows, columns=['type', 'procs', 'ops'])
 		dfs.append(df)
 
 	for i in range(len(dfs)):
 		print(f'Plotting scalability for payload size {szs[i]}')
-		plot_scale(dfs[i], f'Scalability of PERK for payload size {szs[i]}', out_file=f'scale_{szs[i]}.png')
+		sorted_df = dfs[i].sort_values(['type'], axis=0)	
+		plot_scale(sorted_df, f'Scalability of PERK for payload size {szs[i]}', out_file=f'scale_{szs[i]}.svg')
 
 def get_cpu(c_f):
 	cpu = 0
 	with open(c_f) as f:
 		for line in f.readlines():
 			if 'cycles' in line:
+				if '32' in c_f:
+					print(line, c_f)
 				cols = [p for p in line.split(' ') if len(p) > 0]
 				cpu = int(cols[0].replace(',',''))
 	return cpu
@@ -180,6 +187,9 @@ def read_cpu(path, files):
 	cfgs = []
 
 	for f in files:
+		sd = 's'
+		if 'cl' in f:
+			sd = 'cl'
 		dat = get_fn_info(f)
 		cfg = dat['comp']
 		if cfg not in cfgs:
@@ -189,32 +199,45 @@ def read_cpu(path, files):
 			szs.append(sz)
 		
 		if results[cfg] == None:
-			results[cfg] = {'size': {}}
-		if sz not in results[cfg]['size']:
-			results[cfg]['size'][sz] = []
-		results[cfg]['size'][sz] += [get_cpu(join(path, f))]
+			results[cfg] = {'side': {}}
+		if sd not in results[cfg]['side']:
+			results[cfg]['side'][sd] = {'size': {}}
+		if sz not in results[cfg]['side'][sd]['size']:
+			results[cfg]['side'][sd]['size'][sz] = []
+		cpu = get_cpu(join(path, f))
+		if cpu > 0:
+			results[cfg]['side'][sd]['size'][sz] += [cpu]
 		
-	print(results)
 	cfgs.sort()
 
 	rows = []
+	rows_cl = []
+	rows_sr = []
 	for sz in szs:
-		for k in cfgs:
-			rows.append([k, sz, mean(results[k]['size'][sz])])
-	df = pd.DataFrame(data=rows, columns=['type','size', 'cpu'])
-	print(df)
-	plot_cpu(df, f'CPU cycles consumed by PERK for given payload size', out_file=f'cpu_{len(szs)}.png')
+		for sd in ['cl', 's']:
+			for k in cfgs:
+				if sd == 'cl':
+					for r in results[k]['side'][sd]['size'][sz]:
+						rows_cl.append([k, sd, int(sz), r])
+				else:
+					for r in results[k]['side'][sd]['size'][sz]:
+						rows_sr.append([k, sd, int(sz), r])
+	print(pd.DataFrame(data=rows_cl, columns=['type', 'side','size', 'cpu']))
+	df_cl = pd.DataFrame(data=rows_cl, columns=['type', 'side','size', 'cpu']).sort_values(['size','type'], axis=0)
+	df_sr = pd.DataFrame(data=rows_sr, columns=['type', 'side','size', 'cpu']).sort_values(['size','type'], axis=0)
+	print('Plotting CPU usage for following payload sizes:', szs)
+	plot_cpu(df_cl, f'CPU cycles consumed by PERK for given payload size client-side', out_file=f'c_cpu_{len(szs)}.svg')
+	plot_cpu(df_sr, f'CPU cycles consumed by PERK for given payload size server-side', out_file=f's_cpu_{len(szs)}.svg')
 
 def plot_scale(df, title, out_file=None):
-	sg = sns.lineplot(data=df, palette='Set3', linewidth=2.0, markers=True, dashes=False)
+	sg = sns.lineplot(data=df, x='procs', y='ops', hue='type', ci='sd', style='type', linewidth=2.0, markers=True, dashes=False)
 
 	sg.set(xlim = (0,16))
-	sg.set(ylim = (0, 4500000))
-	sg.set_title(title)
+	sg.set(ylim = (0, 4000000))
 
 	plt.xlabel('Clients')
 	plt.ylabel('Performance (ops/sec)')
-	#store it in a file
+
 	if out_file != None:
 		f = sg.get_figure()
 		f.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
@@ -222,15 +245,15 @@ def plot_scale(df, title, out_file=None):
 	plt.clf()
 
 def plot_lat(df, title, out_file=None):
-	sg = sns.lineplot(data=df, palette='Set3', linewidth=1.5, markers=True, dashes=False)
+	sg = sns.lineplot(data=df, x='size', y='latency', hue='type', style='type', linewidth=1.5, markers=True, dashes=False)
 
-	#ax.set_xlim(0, 128)
+	sg.set(xlim = (0, None))
 	sg.set(ylim = (0, 30))
-	sg.set_title(title)
+	#sg.set_title(title)
 
-	plt.xlabel('Payload size')
+	plt.xlabel('Payload size (bytes)')
 	plt.ylabel('Latency (usec)')
-	#store it in a file
+
 	if out_file != None:
 		f = sg.get_figure()
 		f.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
@@ -238,17 +261,13 @@ def plot_lat(df, title, out_file=None):
 	plt.clf()
 
 def plot_cpu(df, title, out_file=None):
-	sg = sns.catplot(data=df, kind='bar', x='size', y='cpu', hue='type', ci='sd', alpha=.6)
+	sg = sns.catplot(data=df, x='size', y='cpu', hue='type', kind='bar', ci='sd', alpha=.6, capsize=.1, errwidth=0.7)
 
-	#ax.set_title(title)
-	#plt.xlabel('Configuration')
-	#plt.ylabel('Cpu cycles')
-	sg.set_axis_labels('','Cpu cycles')	
-	sg.legend.set_title('Title')
+	sg.set_axis_labels('Payload size (bytes)','Cpu cycles')	
+	#sg.legend.set_title('Title')
 
 	if out_file != None:
 		sg.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
-
 	plt.clf()
 	
 
@@ -261,7 +280,6 @@ def main(argv):
 	bm_lat = [f for f in files if 'cl_bm_lat' in f]
 	bm_cpu = [f for f in files if 'cpu' in f]
 
-	#print(bm_cpu)
 	read_cpu(path, bm_cpu)
 	read_lat(path, bm_lat)
 	read_scale(path, bm_scale)
