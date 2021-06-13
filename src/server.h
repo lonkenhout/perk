@@ -1,5 +1,5 @@
-#ifndef __PEARS_SERVER_H__
-#define __PEARS_SERVER_H__
+#ifndef __PERK_SERVER_H__
+#define __PERK_SERVER_H__
 
 #include <stdio.h>
 
@@ -29,9 +29,7 @@ struct kv_pair {
 #define POLL_CLIENT_CONNECT_ESTABLISHED (3)
 
 
-void pears_kv_init(void);
-void pears_kv_destroy(void);
-void pears_kv_insert(void *key, void *val);
-char *pears_kv_get(void *key);
+void perk_kv_init(void);
+void perk_kv_destroy(void);
 
 #endif

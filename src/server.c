@@ -1,15 +1,17 @@
 /* Server source file */
 
 #include "./server.h"
-
+#include "./ck_hash.h"
 
 
 static GHashTable *ght = NULL;
-static PEARS_SVR_CTX *psc = NULL;
-static PEARS_CLIENT_COLL *conns = NULL;
+static struct ck_hash_table *ct = NULL;
+static PERK_SVR_CTX *psc = NULL;
+static PERK_CLIENT_COLL *conns = NULL;
 
 /* mutex for performing put requests from a worker */
-static pthread_mutex_t put_mutex;
+static pthread_mutex_t pmutex;
+static pthread_rwlock_t plock;
 
 /* usage */
 void print_usage(char *cmd){
@@ -68,50 +70,17 @@ int parse_opts(int argc, char **argv){
 	return ret;
 }
 
-void pears_kv_init()
+void perk_kv_init()
 {
-	ght = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
-	if(ght == NULL){
-		log_err("failed to initialize hash table");
-		exit(1);
-	}
+	ct = ck_hash_table_init();
 }
 
-void pears_kv_destroy()
+void perk_kv_destroy()
 {
-	pthread_mutex_lock(&put_mutex);
-	g_hash_table_destroy(ght);
-	pthread_mutex_unlock(&put_mutex);
+	ck_hash_table_destroy(ct);
 }
 
-void pears_kv_insert(void *key, void *val)
-{
-	pthread_mutex_lock(&put_mutex);
-	g_hash_table_insert(ght, g_strdup(key), g_strdup(val));
-	pthread_mutex_unlock(&put_mutex);
-}
-
-char *pears_kv_get(void *key)
-{
-	return (char*) g_hash_table_lookup(ght, key);
-}
-
-
-void pears_kv_list_all()
-{
-	GList *keys = g_hash_table_get_keys(ght);
-	GList *values = g_hash_table_get_values(ght);
-	GList *it1, *it2;
-	int i = 0;
-	for(it1 = keys, it2 = values; it1 != NULL; it1 = it1->next, it2 = it2->next, i++){
-		printf("%s : %s\n", (char*)it1->data, (char*)it2->data);
-	}
-	printf("Total count: %d\n", i);	
-	g_list_free(keys);
-	g_list_free(values);
-}
-
-int process_connect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+int process_connect_req(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 {
 	int ret = -1;
 
@@ -132,7 +101,7 @@ int process_connect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 }
 
 /* finalize the request */
-int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+int process_established_req(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 {
 	int ret = -1;
 	ret = finalize_client_conn(pc_conn);
@@ -149,7 +118,7 @@ int process_established_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	return POLL_CLIENT_CONNECT_ESTABLISHED;
 }
 
-int process_disconnect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
+int process_disconnect_req(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 {
 	int ret = disconnect_client_conn(psc, pc_conn);
 	if(ret) {
@@ -159,7 +128,7 @@ int process_disconnect_req(PEARS_SVR_CTX *psc, PEARS_CLIENT_CONN *pc_conn)
 	return POLL_CLIENT_DISCONNECT_SUCCESS;
 }
 
-int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns) 
+int process_cm_event(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns) 
 {
 	/* retrieve some event on the connection management channel */
 	struct rdma_cm_event *cm_event = NULL;
@@ -180,7 +149,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 	tmp_id = cm_event->id;
 
 
-	PEARS_CLIENT_CONN *pc_conn = NULL;
+	PERK_CLIENT_CONN *pc_conn = NULL;
 	int conn_i;
 
 	switch(cm_event->event) {
@@ -201,7 +170,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			ret = process_connect_req(psc, pc_conn);
 			if(ret == POLL_CLIENT_CONNECT_SUCCESS) {
 				conns->active[conn_i] = 1;
-				printf("added client to entry: %d\n", conn_i);
+				debug("added client to entry: %d\n", conn_i);
 				ret = 0;
 			} else {
 				ret = -2;
@@ -221,6 +190,7 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 			pc_conn = &(conns->clients[conn_i]);
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
+			pc_conn->ct = ct;
 			pthread_create(&(conns->threads[conn_i]), NULL, worker, (void*) pc_conn);
 
 			if(ret == POLL_CLIENT_CONNECT_ESTABLISHED) {
@@ -260,12 +230,13 @@ int process_cm_event(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 }
 
 
-void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
+void server(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns)
 {
 	/* setup resources */
 	struct epoll_event ev, events[MAX_EVENTS];
 	int epollfd, n_fds;
-	pthread_mutex_init(&put_mutex, NULL);
+	pthread_rwlock_init(&plock, NULL);
+	pthread_mutex_init(&pmutex, NULL);
 	struct timeval start, end;
 	int i, res = 0, done = 0;
 
@@ -331,9 +302,10 @@ void server(PEARS_SVR_CTX *psc, PEARS_CLIENT_COLL *conns)
 		if(stop) break;
 
     }
-    pthread_mutex_destroy(&put_mutex);
+	pthread_mutex_destroy(&pmutex);
+    pthread_rwlock_destroy(&plock);
     destroy_server_dev(psc);
-	pears_kv_destroy();
+	perk_kv_destroy();
 	free(psc);
 	free(conns);
 	printf("Cleanup complete, exiting..\n");
@@ -346,7 +318,7 @@ int main(int argc, char **argv){
 	}
 	
 	/* prepare server resources and parse program arguments */
-	psc = (PEARS_SVR_CTX *)calloc(1, sizeof(*psc));
+	psc = (PERK_SVR_CTX *)calloc(1, sizeof(*psc));
 
 	int res = parse_opts(argc, argv);
 	if(res != 0){
@@ -358,16 +330,16 @@ int main(int argc, char **argv){
 	}
 
 	/* struct to store multiple clients in, holds enough for MAX_CLIENTS */
-	conns = (PEARS_CLIENT_COLL *)calloc(1, sizeof(*conns));
+	conns = (PERK_CLIENT_COLL *)calloc(1, sizeof(*conns));
 
 	/* initialize key-value store */
-	pears_kv_init();
+	perk_kv_init();
 
 	/* setup server rdma resources */
 	res = init_server_dev(psc);
 	if(res) {
 		destroy_server_dev(psc);
-		pears_kv_destroy();
+		perk_kv_destroy();
 		free(psc);
 		free(conns);
 		exit(1);
@@ -377,7 +349,7 @@ int main(int argc, char **argv){
 	
 	//TODO: cleaner exit
 	destroy_server_dev(psc);
-	pears_kv_destroy();
+	perk_kv_destroy();
 	free(psc);
 	free(conns);
 	printf("Cleanup complete, exiting..\n");
