@@ -1,7 +1,7 @@
 
 #include "clients.h"
 
-int prepare_request_side(PEARS_CLT_CTX *pcc)
+int prepare_request_side(PERK_CLT_CTX *pcc)
 {
 	int ret = 0;
 	switch(pcc->config.client) {
@@ -20,7 +20,7 @@ int prepare_request_side(PEARS_CLT_CTX *pcc)
 	return ret;
 }
 
-int prepare_response_side(PEARS_CLT_CTX *pcc)
+int prepare_response_side(PERK_CLT_CTX *pcc)
 {
 	int ret = 0;
 	switch(pcc->config.server) {
@@ -43,7 +43,7 @@ int prepare_response_side(PEARS_CLT_CTX *pcc)
 	return ret;
 }
 
-int prep_request(PEARS_CLT_CTX *pcc, struct request *request)
+int prep_request(PERK_CLT_CTX *pcc, struct request *request)
 {
 	int req = -1, ret = -1;
 	
@@ -62,7 +62,7 @@ int prep_request(PEARS_CLT_CTX *pcc, struct request *request)
 	return ret;
 }
 
-int send_request(PEARS_CLT_CTX *pcc)
+int send_request(PERK_CLT_CTX *pcc)
 {
 	int ret = -1;
 	switch(pcc->config.client) {
@@ -83,7 +83,7 @@ int send_request(PEARS_CLT_CTX *pcc)
 	return ret;
 }
 
-int recv_response(PEARS_CLT_CTX *pcc)
+int recv_response(PERK_CLT_CTX *pcc)
 {
 	int ret = -1;
 	struct ibv_wc wc[2];
@@ -124,7 +124,6 @@ int recv_response(PEARS_CLT_CTX *pcc)
 				
 				ret = rdma_post_write_reuse(&(pcc->rd_wr), pcc->qp);
 				if(ret) log_err("reading from remote memory failed");
-				
 				ret = rdma_spin_cq(pcc->cq, wc, 1);
 				if(ret != 1) {
 					log_err("rdma_poll_cq() failed");
@@ -139,7 +138,7 @@ int recv_response(PEARS_CLT_CTX *pcc)
     return 0;
 }
 
-int prep_next_iter(PEARS_CLT_CTX *pcc)
+int prep_next_iter(PERK_CLT_CTX *pcc)
 {
 	int ret = -1;
     switch(pcc->config.server) {
@@ -167,14 +166,13 @@ int validate_request(int req, char *input)
 
 
 
-int client(PEARS_CLT_CTX *pcc)
+int client(PERK_CLT_CTX *pcc)
 {
 	int ret = -1;
 	struct timeval start;
 	struct timeval end, t_s, t_e;
 	struct ibv_wc wc;
 
-	printf("somewhere here\n");
 	ret = prepare_request_side(pcc);
 	if(ret) return ret;
 
@@ -183,6 +181,9 @@ int client(PEARS_CLT_CTX *pcc)
 
 	int count = 0;
 	bm_ops_start(&t_s);
+
+	// test
+	pcc->sd_request.rid = 0;
 	/* do the same request max_reqs times */
 	while(count < pcc->max_reqs) {
 		bm_latency_start(&start);
@@ -197,8 +198,9 @@ int client(PEARS_CLT_CTX *pcc)
 		if(recv_response(pcc)) return 1;
 		count++;
 		bm_latency_end(&end);
-		bm_latency_show("sd_sd", start, end);
+		bm_latency_show("comp", start, end);
 		print_req(pcc->sd_request, pcc->sd_response);
+		pcc->sd_request.rid++;
 		if(prep_next_iter(pcc)) return 1;
 	}
 	bm_ops_start(&t_e);
