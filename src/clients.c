@@ -193,7 +193,6 @@ int client(PERK_CLT_CTX *pcc)
 			fprintf(stderr, "error, request couldnt be sent\n");
 			exit(1);
 		}
-
 		if(send_request(pcc)) return 1;
 		if(recv_response(pcc)) return 1;
 		count++;

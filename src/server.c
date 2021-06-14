@@ -188,6 +188,7 @@ int process_cm_event(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns)
 			conn_i = client_coll_find_conn(conns, src);
 			debug("finalizing connection at entry %d\n", conn_i);
 			pc_conn = &(conns->clients[conn_i]);
+			pc_conn->sd_request.type = EMPTY;
 			/* finalize the connection */
 			ret = process_established_req(psc, pc_conn);
 			pc_conn->ct = ct;
@@ -288,7 +289,7 @@ void server(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns)
 							stop = 1;
 							break;
 						}
-					}
+					} 
 					debug("disconnect processed successfully\n");
 				} else if(res == POLL_CLIENT_CONNECT_ESTABLISHED){
 					/* as soon as first client connects, start the timer*/

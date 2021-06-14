@@ -89,7 +89,6 @@ int prepare_request_server(PERK_CLIENT_CONN *pcc)
 		case RDMA_COMBO_SD:
 			ret = rdma_post_recv_reuse(&(pcc->recv_wr), pcc->qp);
 		    if(ret) log_err("rdma_post_recv() failed");
-			pcc->sd_request.type = EMPTY;
 			break;
 		case RDMA_COMBO_WRIMM:
 			ret = rdma_post_recv(pcc->imm_data, pcc->qp);
@@ -186,8 +185,6 @@ void *worker(void *args)
 	PERK_CLIENT_CONN *pcc = (PERK_CLIENT_CONN *)args;
 	
 	pcc->sd_response.type = RESPONSE_OK;
-	pcc->sd_request.type = EMPTY;
-	
 	ret = prepare_request_server(pcc);
 	if(ret) return NULL;
 	ret = prepare_response_server(pcc);
@@ -195,17 +192,18 @@ void *worker(void *args)
 
 
 	struct ibv_wc wc;
-	uint64_t last_rid = -1;
+	long last_rid = -1;
+	int retry_count = 0;
 	while(1) {
 		ret = recv_request(pcc);
+		if(pcc->ops == 0) printf("%lu: recv\n", pcc);
 		if(ret) return NULL;
-		if(last_rid == pcc->sd_request.rid) {
-			//printf("exceeded it here (%lu): %d:%s %d:%s\n", last_rid, pcc->sd_request.type, pcc->sd_request.key, pcc->sd_response.type, pcc->sd_response.key);
+		if (last_rid == pcc->sd_request.rid){
 			continue;
-		}
+		} 
 		last_rid = pcc->sd_request.rid;
-		req = handle_request(pcc, &(pcc->sd_request), &(pcc->sd_response));
 		
+		req = handle_request(pcc, &(pcc->sd_request), &(pcc->sd_response));
 		ret = send_response(pcc);
 		if(ret) return NULL;
 
