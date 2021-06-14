@@ -20,9 +20,6 @@ bm_latency=0
 in_file="/var/scratch/${USER}/input_3000000_2048_95.in"
 o_dir="/var/scratch/${USER}/bm4/"
 in_conf="3000000_2048_95"
-sizes=(23 55 119 247 503 1015 2039)
-offset=9
-sizes=(32 64 128 256 512 1024 2048)
 scale=""
 procs=""
 reruns=1
@@ -166,13 +163,13 @@ run_server_perf() {
     port=20838
     if [ "$m" == "0" ]; then
 		run=$4
-        prun -reserve $rid -np 1 -o ${o_dir}s_cpu.mcd.${in_conf}.1_1.r$run perf stat memcached -u $USER -l $ip -p $port -t 16 &
+        prun -reserve $rid -np 1 -o ${o_dir}s_bm_cpu.mcd.${in_conf}.1_1.r$run perf stat memcached -u $USER -l $ip -p $port -t 16 &
     else
         comp=$4
         cores=$5
         bm_type=$6
 		run=$7
-        prun -reserve $rid -np 1 -o ${o_dir}s_cpu.${comp}.${in_conf}.1_${cores}.r$run perf stat ./bin/pears_server -r $comp -a $ip -p $port &
+        prun -reserve $rid -np 1 -o ${o_dir}s_bm_cpu.${comp}.${in_conf}.1_${cores}.r$run perf stat ./bin/pears_server -r $comp -a $ip -p $port &
     fi
 }
 
@@ -186,12 +183,12 @@ run_clients_perf() {
     if [ "$m" == "0" ]; then
 		run=$6
         echo prun -$num_p -np $num_n -o ${o_dir}cl_cpu.mcd.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
-        prun -$num_p -np $num_n -o ${o_dir}cl_cpu.mcd.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/client_mcd -a $ip -p $port -c $count -u -i $in_file
+        prun -$num_p -np $num_n -o ${o_dir}cl_bm_cpu.mcd.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/client_mcd -a $ip -p $port -c $count -u -i $in_file
     else
         comp=$6
 		run=$7
         echo prun -$num_p -np $num_n -o ${o_dir}cl_cpu.${in_conf}.${comp}.${num_p}_${num_n}.r$run perf stat ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
-        prun -$num_p -np $num_n -o ${o_dir}cl_cpu.${in_conf}.${comp}.${num_p}_${num_n}.r$run perf stat ./bin/pears_client -r $comp -a $ip -p $port -c $count -u -i $in_file
+        prun -$num_p -np $num_n -o ${o_dir}cl_bm_cpu.${comp}.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/pears_client -r $comp -a $ip -p $port -c $count -u -i $in_file
     fi
 }
 
@@ -217,24 +214,27 @@ run_clients() {
 		bm_type=$6
 		run=$7
         echo "prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n}.r$run ./bin/client_mcd -a $ip -p $port -c $count -i $in_file"
-        prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n}.r$run ./bin/client_mcd -a $ip -p $port -c $count -u -i $in_file
+        prun -$num_p -np $num_n -t 1800 -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n}.r$run ./bin/client_mcd -a $ip -p $port -c $count -u -i $in_file
     else
         comp=$6
 		bm_type=$7
 		run=$8
         echo "prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n}.r$run ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file"
-        prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n}.r$run ./bin/pears_client -r $comp -a $ip -p $port -c $count -u -i $in_file
+        prun -$num_p -np $num_n -t 1800 -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n}.r$run ./bin/pears_client -r $comp -a $ip -p $port -c $count -u -i $in_file
     fi
 }
 
 comps=(sd_sd wr_sd wr_wr wr_rd wrimm_sd)
+offset=9
+#sizes=(32 64 128 256 512 1024 2048)
+sizes=(256 512 1024 2048)
 
 for csz in "${sizes[@]}"; do
 	vsz=`expr ${csz} - ${offset}`
-    in_file="/var/scratch/${USER}/input/input_3000000_${csz}_95_%d.in"
+    in_file="/var/scratch/${USER}/input/input_3000000_${csz}_95_"
 	in_conf="3000000_${csz}_95"
 	echo $in_file
-	for i in $(seq 1 $rerun); do
+	for i in $(seq 2 $rerun); do
 		# reserve a node for the server
 		info "RESERVING NODE FOR SERVER, RUN $i SIZE $csz"
 		rid="$(reserve_server_node)"
@@ -299,6 +299,7 @@ for csz in "${sizes[@]}"; do
 			run_clients_perf 0 $node 1 1 $count $i
 			kill_server 2 $rid
 		fi
+		count=1000000
 		if [ "$bm_latency" == "1" ]; then
 			info "PREPARING LATENCY BENCHMARK"
 			PERK_OVERRIDE_VALSIZE=${vsz} PERK_BM_SERVER_EXIT=1 PERK_BM_LATENCY=1 cmake .
@@ -317,6 +318,7 @@ for csz in "${sizes[@]}"; do
 			run_clients 0 $node 1 1 $count bm_lat $i
 			kill_server 0 $rid
 		fi
+		count=3000000
 		info "Cancelling server node reservation"
 		preserve -c ${rid}
 		rid=""
