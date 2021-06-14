@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 	if(use_id_based_file) {
         get_cid(argv[0]);
         char final_file[100] = {0,};
-        snprintf(final_file, sizeof(final_file), file_name, cid);
+        snprintf(final_file, sizeof(final_file), "%s%d.in", file_name, cid);
         open_file(final_file);
     } else if(file_name) {
 		open_file(file_name);
@@ -197,6 +197,8 @@ int main(int argc, char **argv) {
 				if(rc != MEMCACHED_SUCCESS && rc != MEMCACHED_NOTFOUND) {
 					fprintf(stderr, "memcached_mget() failed: %s\n", memcached_strerror(memc, rc));
 				}
+				bm_latency_end(&l_e);
+				bm_latency_show("mcd", l_s, l_e);
 				free(ret_value);
 				/*char ret_key[MEMCACHED_MAX_KEY];
 				memset(ret_key, 0, sizeof(ret_key));
@@ -207,8 +209,6 @@ int main(int argc, char **argv) {
 					if(rc != MEMCACHED_SUCCESS) {
 						printf("error retrieving value for key\n"); break;
 					} 
-					bm_latency_end(&l_e);
-					bm_latency_show("mcd", l_s, l_e);
 					free(ret_value);
 					memset(ret_key, 0, sizeof(ret_key));
 				}*/
