@@ -15,6 +15,12 @@ import plotly.express as px
 comps = ['sd_sd', 'wr_sd', 'wr_wr', 'wrimm_sd', 'wr_rd', 'mcd']
 bm_types = ['']
 
+def df_to_file(filename, df):
+	with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+		with open(filename, 'w+') as tf:
+			tf.write(df.__str__())
+		
+
 def get_fn_info(filename):
 	dat = {'comp': None, 'distr': None, 'reqs' : None, 'payload_size' : None}
 	dat['comp'] = [c for c in comps if c in filename][0]
@@ -43,11 +49,15 @@ def get_fn_info(filename):
 
 def get_avg_lat(l_f):
 	lats = []
+	res = {'mean': 0.0, 'min': 0.0, 'max': 0.0}
 	with open(l_f) as f:
 		for line in f.readlines():
 			if '== benchmark' in line:
 				lats.append(float(line.split('[')[2].split(' ')[0]))
-	return mean(lats)
+	res['mean'] = mean(lats)
+	res['min'] = min(lats)
+	res['max'] = max(lats)
+	return res
 
 def read_lat(path, files):
 	results = {'mcd' : None, 'sd_sd' : None, 'wr_rd' : None, 'wr_sd' : None, 'wr_wr' : None, 'wrimm_sd' : None}
@@ -57,9 +67,9 @@ def read_lat(path, files):
 	rows = []
 	for f in files:
 		dat = get_fn_info(f)
-		print(f)
-		lat_mean = get_avg_lat(join(path, f))
-		#lat_mean = 0
+		lat_res = get_avg_lat(join(path, f))
+		print(f'{f} results:\n\t min: {lat_res["min"]}, max: {lat_res["max"]}, mean: {lat_res["mean"]}')
+		lat_mean = lat_res["mean"]
 		cfg = dat['comp']
 		if cfg not in cfgs:
 			cfgs.append(cfg)
@@ -85,6 +95,7 @@ def read_lat(path, files):
 	df = pd.DataFrame(data=rows, columns=['size','type','latency'])
 	sorted_df = df.sort_values(['size','type'], axis=0)	
 
+	df_to_file('latency_tab.txt', df)
 
 	plot_lat(sorted_df, f'Latency of PERK for various payload sizes compared with Memcached', out_file=f'lat_{len(szs)}.svg')
 
@@ -129,7 +140,8 @@ def read_scale(path, files):
 			if np not in results[cfg]['size'][sz]['cores']:
 				results[cfg]['size'][sz]['cores'][np] = []
 			ops = get_ops(join(path, f))
-			results[cfg]['size'][sz]['cores'][np] += [ops]
+			if ops > 0.0:
+				results[cfg]['size'][sz]['cores'][np] += [ops]
 		elif cfg == 'mcd' and not 's_bm_scale' in f:
 			if cfg not in cfgs:
 				cfgs.append(cfg)
@@ -153,21 +165,40 @@ def read_scale(path, files):
 	cfgs.sort()
 	nps.sort()
 	dfs = []
-	
+	diffs = []
 	for sz in szs:
 		rows = []
 		for np in nps:
 			#row = []
 			for k in cfgs:
+				kmin = min(results[k]['size'][sz]['cores'][str(np)])
+				kmax = max(results[k]['size'][sz]['cores'][str(np)])
+				kmean = mean(results[k]['size'][sz]['cores'][str(np)])
+				diffs.append([k, round((kmin-kmean)/((kmin+kmean)/2)*100, 1)])
+				diffs.append([k, round((kmax-kmean)/((kmean+kmax)/2)*100, 1)])
 				for r in results[k]['size'][sz]['cores'][str(np)]:
 					rows.append([k, np, r])
 		df = pd.DataFrame(data=rows, columns=['type', 'procs', 'ops'])
 		dfs.append(df)
+	print(diffs)
+	vardf = pd.DataFrame(data=diffs, columns=['type', 'max_diff'])
+	plot_variability_dist(vardf, None, 'var_dist_kde.svg')
 
 	for i in range(len(dfs)):
 		print(f'Plotting scalability for payload size {szs[i]}')
 		sorted_df = dfs[i].sort_values(['type'], axis=0)	
+		df_to_file(f'bm_scale_{szs[i]}.txt', sorted_df)
 		plot_scale(sorted_df, f'Scalability of PERK for payload size {szs[i]}', out_file=f'scale_{szs[i]}.svg')
+
+def plot_variability_dist(diffs, title, out_file=None):
+	#sg = sns.displot(diffs)
+	sg = sns.displot(data=diffs, x='max_diff', hue='type', kind='kde')
+
+	plt.xlabel('Maximum difference from the mean (%)')
+
+	if out_file != None:
+		f = sg# sg.get_figure()
+		f.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
 
 def get_cpu(c_f):
 	cpu = 0
@@ -225,6 +256,8 @@ def read_cpu(path, files):
 	print(pd.DataFrame(data=rows_cl, columns=['type', 'side','size', 'cpu']))
 	df_cl = pd.DataFrame(data=rows_cl, columns=['type', 'side','size', 'cpu']).sort_values(['size','type'], axis=0)
 	df_sr = pd.DataFrame(data=rows_sr, columns=['type', 'side','size', 'cpu']).sort_values(['size','type'], axis=0)
+	df_to_file('cl_cpu_tab.txt', df_cl)
+	df_to_file('sr_cpu_tab.txt', df_sr)
 	print('Plotting CPU usage for following payload sizes:', szs)
 	plot_cpu(df_cl, f'CPU cycles consumed by PERK for given payload size client-side', out_file=f'c_cpu_{len(szs)}.svg')
 	plot_cpu(df_sr, f'CPU cycles consumed by PERK for given payload size server-side', out_file=f's_cpu_{len(szs)}.svg')
@@ -280,7 +313,7 @@ def main(argv):
 	bm_lat = [f for f in files if 'cl_bm_lat' in f]
 	bm_cpu = [f for f in files if 'cpu' in f]
 
-	read_cpu(path, bm_cpu)
+	#read_cpu(path, bm_cpu)
 	read_lat(path, bm_lat)
 	read_scale(path, bm_scale)
 	
