@@ -99,7 +99,7 @@ int get_input(char **dest, int lines) {
 	for(i = 0; i < lines; ++i) {
 		debug("Requesting input line from file or stdin [%d/%d]\n", i+1, lines);
 		if(using_file) {
-			ret = get_file_line(f_ptr, dest[i]);
+			ret = get_file_line(f_ptr, dest);
 		} else {
 			ret = get_line(dest[i]);
 		}
@@ -159,8 +159,10 @@ int main(int argc, char **argv) {
         get_cid(argv[0]);
         char final_file[100] = {0,};
         snprintf(final_file, sizeof(final_file), "%s%d.in", file_name, cid);
+		printf("final file: %s\n", final_file);
         open_file(final_file);
     } else if(file_name) {
+		printf("final file: %s\n", file_name);
 		open_file(file_name);
 	}
 
@@ -187,9 +189,9 @@ int main(int argc, char **argv) {
 	size_t ret_value_len;
 	char *ret_value = NULL;
 	while(i < max_reqs) {
-		bm_latency_start(&l_s);
 		req = prep_request(request, key, value);
 		key_length = strlen(key);
+		bm_latency_start(&l_s);
 		switch(req) {
 			case GET:
 				//rc = memcached_mget(memc, (const char * const*)&key, &key_length, 1);
@@ -218,6 +220,8 @@ int main(int argc, char **argv) {
 				if(rc != MEMCACHED_SUCCESS) {
 					log_err("error inserting key\n");
 				}
+				bm_latency_end(&l_e);
+				bm_latency_show("mcd", l_s, l_e);
 				break;
 		}
 		i++;
