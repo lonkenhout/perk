@@ -859,6 +859,7 @@ int rdma_spin_cq(struct ibv_cq *cq,
 				int max_wc)
 {
 	int ret = -1, total_wc = 0;
+	struct timespec req;
 	debug("polling for %d wcs\n", max_wc);
 	do {
 		/* check for work completions */

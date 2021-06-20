@@ -92,7 +92,9 @@ int get_input(char **dest, int lines) {
 	for(i = 0; i < lines; ++i) {
 		debug("Requesting input line from file or stdin [%d/%d]\n", i+1, lines);
 		if(pcc->using_file) {
-			ret = get_file_line(pcc->f_ptr, dest[i]);
+			ret = get_file_line(pcc->f_ptr, dest);
+			if(ret == -1) break;
+			ret = OK;
 		} else {
 			ret = get_line(dest[i]);
 		}
@@ -114,7 +116,7 @@ void get_cid(char *prog_name) {
 	if(!curr) return;
 	curr = strtok(NULL, ".");
 	if(!curr) return;
-	pcc->cid = strtoul(curr, NULL, 10);
+	pcc->cid = strtoul(curr, NULL, 10) % 16;
 }
 
 int main(int argc, char **argv){

@@ -3,8 +3,6 @@
 
 #include <stdio.h>
 
-#include <glib.h>
-
 #include "./util.h"
 #include "./rdma.h"
 #include "./workers.h"

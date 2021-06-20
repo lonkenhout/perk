@@ -4,7 +4,6 @@
 #include "./ck_hash.h"
 
 
-static GHashTable *ght = NULL;
 static struct ck_hash_table *ct = NULL;
 static PERK_SVR_CTX *psc = NULL;
 static PERK_CLIENT_COLL *conns = NULL;

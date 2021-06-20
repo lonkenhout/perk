@@ -165,7 +165,7 @@ typedef struct perk_client_conn{
 	struct ibv_send_wr			rd_wr;
 } PERK_CLIENT_CONN;
 
-#define MAX_CLIENTS (32)
+#define MAX_CLIENTS (64)
 typedef struct perk_client_collection{
 	int 					active[MAX_CLIENTS];
 	int 					established[MAX_CLIENTS];

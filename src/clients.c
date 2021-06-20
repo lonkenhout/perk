@@ -119,6 +119,7 @@ int recv_response(PERK_CLT_CTX *pcc)
                 log_err("rdma_poll_cq() failed");
                 exit(1);
             }
+			uint64_t count = 0;
 			/* check remote memory until the result has been placed in response buffer */
 			while(!(pcc->sd_response.type == RESPONSE_OK || pcc->sd_response.type == RESPONSE_EMPTY || pcc->sd_response.type == EXIT_OK)) {
 				
@@ -129,7 +130,9 @@ int recv_response(PERK_CLT_CTX *pcc)
 					log_err("rdma_poll_cq() failed");
 					exit(1);
 				}
+				bm_reads_incr(&count);
 			}
+			bm_reads_print(req_type_str(pcc->sd_request.type), count);
 			pcc->sd_response.type = EMPTY;
 			break;
 		default:
@@ -170,7 +173,7 @@ int client(PERK_CLT_CTX *pcc)
 {
 	int ret = -1;
 	struct timeval start;
-	struct timeval end, t_s, t_e;
+	struct timeval end, t_s, t_e, cs, ce;
 	struct ibv_wc wc;
 
 	ret = prepare_request_side(pcc);
@@ -186,13 +189,12 @@ int client(PERK_CLT_CTX *pcc)
 	pcc->sd_request.rid = 0;
 	/* do the same request max_reqs times */
 	while(count < pcc->max_reqs) {
-		bm_latency_start(&start);
-
 		ret = prep_request(pcc, &(pcc->sd_request));
 		if(ret) {
 			fprintf(stderr, "error, request couldnt be sent\n");
 			exit(1);
 		}
+		bm_latency_start(&start);
 		if(send_request(pcc)) return 1;
 		if(recv_response(pcc)) return 1;
 		count++;

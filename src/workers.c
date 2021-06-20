@@ -2,6 +2,7 @@
 
 int handle_request(PERK_CLIENT_CONN *pcc, struct request *request, struct request *response)
 {
+	struct timeval s, e;
 	/* if the client reads the result from server memory, it should be stored in the request memory */
 	switch(pcc->config.server) {
 		case RDMA_COMBO_RD:
@@ -41,33 +42,19 @@ int handle_request(PERK_CLIENT_CONN *pcc, struct request *request, struct reques
 
 void handle_request_get(PERK_CLIENT_CONN *pcc, struct request *request, struct request *response)
 {
-	struct timeval cs, ce;
-	
-	//char *val = pears_kv_get(request->key);
-	//int ret = pears_kv_get(request->key, response->val);
-	bm_cycle_start(&cs);
 	int ret = ck_hash_table_get(pcc->ct, request->key, response->val);
 	if(ret) {
 		response->type = RESPONSE_EMPTY;
 	} else {
 		if(request != response) strcpy(response->key, request->key);
-		//strcpy(response->val, val);
 		response->type = RESPONSE_OK;
 	}
-	bm_cycle_end(&ce);
-	bm_cycle_show("handle_get", cs, ce);
 }
 
 void handle_request_put(PERK_CLIENT_CONN *pcc, struct request *request, struct request *response)
 {
-	struct timeval cs, ce;
-	//pears_kv_insert(request->key, request->val);
-	bm_cycle_start(&cs);
 	ck_hash_table_insert(pcc->ct, request->key, request->val);
-	//TODO: setup way to properly check for failure
 	response->type = RESPONSE_OK;
-	bm_cycle_end(&ce);
-	bm_cycle_show("handle_put", cs, ce);
 }
 
 void handle_request_exit(struct request *request, struct request *response)
@@ -203,10 +190,7 @@ void *worker(void *args)
 	long last_rid = -1;
 	int retry_count = 0;
 	while(1) {
-		bm_cycle_start(&cs);
 		ret = recv_request(pcc);
-		bm_cycle_end(&ce);
-		bm_cycle_show("recv_req", cs, ce);
 		if(ret) return NULL;
 		if (last_rid == pcc->sd_request.rid){
 			continue;
@@ -215,16 +199,10 @@ void *worker(void *args)
 		
 		req = handle_request(pcc, &(pcc->sd_request), &(pcc->sd_response));
 		
-		bm_cycle_start(&cs);
 		ret = send_response(pcc);
-		bm_cycle_end(&ce);
-		bm_cycle_show("send_res", cs, ce);
 		if(ret) return NULL;
 
-		bm_cycle_start(&cs);
 		ret = prep_next_iter(pcc);
-		bm_cycle_end(&ce);
-		bm_cycle_show("prep_next_iter", cs, ce);
 		if(ret) return NULL;
 		
 		if(req == 1) break;
