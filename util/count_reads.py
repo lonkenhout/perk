@@ -1,59 +1,54 @@
 import sys
-import statistics
+from os import listdir
+from os.path import isfile, join
+from statistics import mean
 
-def read_count_32():
-	with open("read_count.txt", "r") as f:
-		r_max = 0
-		r_min = 100000000
-		r_lst = []
-		for l in f.readlines():
-			if "read" in l:
-				r = int(l.strip("\n").split(' ')[2])
-				if r > r_max:
-					r_max = r
-				if r < r_min:
-					r_min = r
-				r_lst.append(r)
-		print(r_max, r_min, sum(r_lst) / len(r_lst))
-
-def read_count_2048():
-	with open("read_count2048.txt", "r") as f:
-		r_max = 0
-		r_min = 100000000
-		r_lst = []
-		for l in f.readlines():
-			if "read" in l:
-				r = int(l.strip("\n").split(' ')[2])
-				if r > r_max:
-					r_max = r
-				if r < r_min:
-					r_min = r
-				r_lst.append(r)
-		print(r_max, r_min, sum(r_lst) / len(r_lst))
-
-def read_cl():
-	with open("/var/scratch/lot230/copy.txt", "r") as f:
-		rl = []
-		wl = []
-		copy = []
+def read_count(fn):
+	with open(fn, "r") as f:
+		r_cts = {'GET': {'lst':[],'mean': 0.0, 'max': 0, 'min': 100000000}, 'PUT': {'lst':[],'mean':0.0, 'max': 0, 'min': 100000000}}
 		for l in f.readlines():
 			try:
-				if 'benchmark' in l:
-					ls = l.split('[')
-					tm = ls[2].split(' ')[0]
-					if 'copying' in ls[1]:
-						copy.append(float(tm))
-					elif 'rdlock' in ls[1]:
-						rl.append(float(tm))
-
-					elif 'wrlock' in ls[1]:
-						wl.append(float(tm))
+				if "READcount" in l:
+					req_type = l.split('[')[1].split(' ')[1].replace(']', '')
+					r = int(l.split('[')[2].split(' ')[0])
+					if r > r_cts[req_type]['max']:
+						r_cts[req_type]['max'] = r
+					if r < r_cts[req_type]['min']:
+						r_cts[req_type]['min'] = r
+					r_cts[req_type]['lst'].append(r)
 			except:
-				print(l)
+				pass
+		for r in r_cts:
+			r_cts[r]['mean'] = mean(r_cts[r]['lst'])
+		print(f'{fn}:')
+		print(f'    \tGET\tPUT')
+		print(f'min:\t{r_cts["GET"]["min"]}\t{r_cts["PUT"]["min"]}')
+		print(f'max:\t{r_cts["GET"]["max"]}\t{r_cts["PUT"]["max"]}')
+		print(f'avg:\t{round(r_cts["GET"]["mean"], 4)}\t{round(r_cts["PUT"]["mean"], 4)}')
+	return r_cts
 
-		print(f'copy {sum(copy) / len(copy)} nanosec avg')
-		print(f'rl {sum(rl) / len(rl)} nanosec avg')
-		print(f'wl {sum(wl) / len(wl)} nanosec avg')
+def main(argv):
+	path = argv[1]
+	files = [f for f in listdir(path) if isfile(join(path, f))]
+	r_cts = []
+	for f in files:
+		r_cts.append(read_count(join(path, f)))
+	overal = {'GET': {'lst':[], 'max': 0, 'min': 100000000}, 'PUT': {'lst':[], 'max': 0, 'min': 100000000}}
+	for r in r_cts:
+		overal['GET']['lst'].append(r['GET']['mean'])
+		if r['GET']['min'] < overal['GET']['min']:
+			overal['GET']['min'] = r['GET']['min']
+		if r['GET']['max'] > overal['GET']['max']:
+			overal['GET']['max'] = r['GET']['max']
 
-read_cl()
+		overal['PUT']['lst'].append(r['PUT']['mean'])
+		if r['PUT']['min'] < overal['PUT']['min']:
+			overal['PUT']['min'] = r['PUT']['min']
+		if r['PUT']['max'] > overal['PUT']['max']:
+			overal['PUT']['max'] = r['PUT']['max']
+	overal['GET']['mean'] = mean(overal['GET']['lst'])
+	overal['PUT']['mean'] = mean(overal['PUT']['lst'])
+	print(overal)
 
+if __name__ == "__main__":
+	main(sys.argv)
