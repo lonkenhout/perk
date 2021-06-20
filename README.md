@@ -20,8 +20,6 @@ Here, the \(X\) indicates whether the action required for request/response is pe
 	- [https://www.reflectionsofthevoid.com/2020/07/software-rdma-revisited-setting-up.html]()
 - How to RDMA? [https://www.rdmamojo.com/]()
 
-## Implementation details
-Unwritten stuff
 
 ## Build
 ### Dependencies
