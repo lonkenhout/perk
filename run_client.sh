@@ -22,7 +22,7 @@ use_id=""
 port=20838
 count=5000000
 infile="none"
-exe=./bin/pears_client
+exe=./bin/perk_client
 comp="wr_wr"
 h=0
 possible_comps=["wr_sd","wrimm_sd","sd_sd","mcd","wr_rd","wr_wr"]
@@ -51,7 +51,6 @@ while true && [ $# -gt 1 ]; do
 			shift 2 ;;
 		-c|--count)
 			count=$2
-			echo "$count"
 			shift 2 ;;
 		-r|--rdma-comp)
 			if [[ ! "${possible_comps[@]}" =~ "$2" ]]; then
@@ -60,7 +59,7 @@ while true && [ $# -gt 1 ]; do
 			fi
 			if [ "$2" == "mcd" ]; then
 				exe=./bin/client_mcd
-				port=11211
+				port=20838
 			fi
 			comp=$2
 			shift 2 ;;
@@ -101,7 +100,7 @@ Options:
   -r, --rdma-comp=<COMP>  rdma composition, can be one of: (default: wr_wr)
                           wr_sd    - send request using WRITE, send response using SEND
                           sd_sd    - send request using SEND, send response using SEND
-                          wimm_sd  - send request using WRITE with immediate data, send response using SEND
+                          wrimm_sd - send request using WRITE with immediate data, send response using SEND
                           wr_wr    - send request using WRITE, send back response using WRITE
                           wr_rd    - send request using WRITE, READ response from server
   -n, --node=<NODENUM>    DAS5 node where target is expected, will replace default IP with 10.149.0.NODENUM

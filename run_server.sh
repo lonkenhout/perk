@@ -19,13 +19,13 @@ eval set -- "$PARSED"
 
 ip=0.0.0.0
 port=20838
-exe=./bin/pears_server
+exe=./bin/perk_server
 comp="wr_wr"
 h=0
 addr_set=0
 possible_comps=["wr_sd","wrimm_sd","sd_sd","wr_wr","wr_rd","mcd"]
 T=0
-max_threads=4
+max_threads=16
 
 while true && [ $# -gt 1 ]; do
         #echo $1
@@ -51,7 +51,7 @@ while true && [ $# -gt 1 ]; do
 			if [ "$2" == "mcd" ]; then
 				echo "switching to memcached"
 				ip=`ifconfig ib0 | grep "inet " | awk '{print $2}'`
-				port=11211
+				port=20838
 			fi
                         comp=$2
                         shift 2
