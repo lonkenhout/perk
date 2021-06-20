@@ -3,13 +3,13 @@ This repo contains the implementation of a distributed key-value store using RDM
 Various types of communication primitives are tested in different configurations. 
 By configuration, I mean the manner in which requests and responses are handled, currently the following have been implemented (or rather, allowed to be run):
 
-| Request \(C\) | Request \(S\) | Response \(C\) | Response \(S\) |
+| Request \(C\) | Response \(C\) | Request \(S\) | Response \(S\) |
 |-------------|------------|--------------|--------------|
-| SEND      | - | - | SEND  |
-| WRITE     | - | - | SEND  |
-| WRITE     | - | - | WRITE |
-| WRITE IMM | - | - | SEND  |
-| WRITE     | - | READ | -  |
+| SEND      | RECV | RECV    | SEND  |
+| WRITE     | RECV | -    | SEND  |
+| WRITE IMM | RECV | RECV | SEND  |
+| WRITE     | -    | -    | WRITE |
+| WRITE     | READ | -    | -  |
 
 Here, the \(X\) indicates whether the action required for request/response is performed by the Client or Server.
 
@@ -25,7 +25,6 @@ Unwritten stuff
 
 ## Build
 ### Dependencies
-- GLIB2
 #### Install
 - Memcached: [https://memcached.org/downloads]()
 - Libmemcached: [https://launchpad.net/libmemcached/+download]()
