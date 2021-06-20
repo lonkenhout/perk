@@ -1,18 +1,17 @@
+# Based on https://github.com/facebook/hhvm/blob/master/CMake/FindLibmemcached.cmake
 find_package(PkgConfig)
 pkg_check_modules(LIBMEMCACHED QUIET libmemcached)
 
 set(LIBMEMCACHED_INCLUDE_DIRS $ENV{LIBMEMCACHED_PATH})
 IF (LIBMEMCACHED_INCLUDE_DIRS)
-  # Already in cache, be silent
   SET(LIBMEMCACHED_FIND_QUIETLY TRUE)
 ENDIF ()
 
 FIND_PATH(LIBMEMCACHED_INCLUDE_DIRS libmemcached/memcached.h)
 
+# Try to find libmemcached in the home folder manually
 FIND_LIBRARY(LIBMEMCACHED_LIBRARIES memcached HINTS /home/$ENV{USER}/local/lib)
 
-# handle the QUIETLY and REQUIRED arguments and set Libmemcached_FOUND to TRUE 
-# if all listed variables are TRUE
 INCLUDE(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(LIBMEMCACHED DEFAULT_MSG LIBMEMCACHED_LIBRARY LIBMEMCACHED_INCLUDE_DIR)
 
