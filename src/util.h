@@ -34,6 +34,9 @@ enum __attribute__ ((__packed__)) REQUEST_TYPE {
 };
 
 
+
+
+
 #define SCALE_SEC	(1.0)
 #define SCALE_MSEC	(1000.0)
 #define SCALE_MCSEC	(1000000.0)
@@ -58,9 +61,9 @@ enum __attribute__ ((__packed__)) REQUEST_TYPE {
 
 struct request{
 	uint64_t rid;
-	enum REQUEST_TYPE type; 
 	char key[MAX_KEY_SIZE];
 	char val[MAX_VAL_SIZE];
+	enum REQUEST_TYPE type; 
 };
 
 /* debugging macros */
@@ -89,7 +92,7 @@ int parse_request(char *request,
 
 
 int get_line(char *buff);
-int get_file_line(FILE *input_file, char *buff);
+int get_file_line(FILE *input_file, char **buff);
 
 int get_addr(char *dst, struct sockaddr *addr);
 int get_addr_port(char *res, struct sockaddr *addr);
@@ -98,6 +101,7 @@ int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
 void get_time(struct timeval *t);
 void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e);
 void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e);
+void incr_num(uint64_t *c);
 
 char *req_type_str(enum REQUEST_TYPE type);
 void print_request(struct request req, struct request res);

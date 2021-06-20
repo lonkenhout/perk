@@ -97,46 +97,15 @@ int get_line(char *buff)
 	return OK;
 }
 
-int get_file_line(FILE *input_file, char *buff)
-{
-	int ch, extra;
-	char *ret = NULL;
-	int i;
-	//if(read(*input_file, buff, max) == 0) return EOF;
-	ret = fgets(buff, MAX_KEY_SIZE + MAX_VAL_SIZE + 10, input_file);
-	if(ret == NULL) {
-		return EOF;
-	}
-	/* If the message was too long, there'll be no newline. In that case we flush
-	 * to EOL so that any excess does not affect the next call. */
-	if(buff[strlen(buff)-1] != '\n') {
-		extra = 0;
-		/* Clean up any extranneous chars */
-		while(((ch = getchar()) != '\n') && (ch != EOF))
-			extra = 1;
-		return (extra == 1) ? TOO_LONG : OK;
-	}
+int get_file_line(FILE *f, char **buff) {
+	int r;
+	size_t len;
 
-	/* Check for ansi escape characters and remove trailing chars by spaces */
-	int ansi_flag = 0;
-	for(i = 0; i < (int)strlen(buff); i++) {
-		if(buff[i] == '\33') {
-			buff[i] = ' '; i++;
-			while(buff[i] != ' ' && buff[i] != '\33' && buff[i] != '\0' && buff[i] != '\t' && i < (int)strlen(buff)) {
-				buff[i] = ' ';
-				i++;
-				ansi_flag = 1;
-			}
-			if(ansi_flag == 1) {
-				i--; ansi_flag = 0;
-			}
-		}
-	}
-
-	/* Otherwise remove newline and store string in buff */
-	buff[strlen(buff)-1] = '\0';
-	return OK;
+	r = getdelim(buff, &len, '\n', f);
+	buff[0][r-1] = '\0';
+	return r;
 }
+
 
 /* Code acknowledgment: rping.c from librdmacm/examples */
 int get_addr(char *dst, struct sockaddr *addr)
@@ -213,6 +182,11 @@ void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e)
 	printf("== benchmark [ops_per_sec][%.1f]\n", ops/(time/1000.0));
 }
 
+void incr_num(uint64_t *c)
+{
+	(*c)++;
+}
+
 char *req_type_str(enum REQUEST_TYPE type)
 {
 	char *ret = NULL;
@@ -248,7 +222,7 @@ void print_request(struct request req, struct request res)
 	if(req.type == PUT) {
 		printf("[%s] %s:%s ===> [%s]\n", rq_tp, req.key, req.val, rs_tp);
 	} else {
-		printf("[%s] %s ===> [%s] %s\n", rq_tp, req.key, rs_tp, (res.type == RESPONSE_OK)? res.val:"-");
+		if(res.type == RESPONSE_OK) printf("[%s] %s ===> [%s] %s\n", rq_tp, req.key, rs_tp, (res.type == RESPONSE_OK)? res.val:"-");
 	}
 }
 
