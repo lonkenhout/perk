@@ -12,22 +12,29 @@ path=`pwd`
 h=0
 
 # internal benchmarks are stored in here
+## DEFAULTS:
+i_dir="/var/scratch/$USER/"
+o_dir="/var/scratch/${USER}/bm/"
+count_conf=3000000
+distr_conf=95
+comps=(sd_sd wr_sd wr_wr wr_rd wrimm_sd)
+sizes=(32 64 128 256 512 1024 2048)
+offset=9
+
+# Other stuff that can be managed through command line args
+count=1000000
 benchmarks=""
 bm_cpu=0
 bm_ops=0
 bm_scale=0
 bm_latency=0
-in_file="/var/scratch/${USER}/input_3000000_2048_95.in"
-o_dir="/var/scratch/${USER}/bm5/"
-in_conf="3000000_2048_95"
 scale=""
 procs=""
 reruns=1
 all=0
-OPTIONS="alocs:r:i:h"
-LONGOPTS="all,latency,ops-per-sec,cpu-usage,scalability:,rerun:,input-conf:,help"
+OPTIONS="alocs:r:i:f:g:n:h"
+LONGOPTS="all,latency,ops-per-sec,cpu-usage,scalability:,rerun:,input-conf:,output-folder:,num-requests:,input-folder,help"
 
-count=3000000
 
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
@@ -79,8 +86,13 @@ while true && [ $# -gt 1 ]; do
 			rerun=$2
 			shift 2 ;;
 		-i|--input-conf)
-			in_conf=$2
-			in_file="/var/scratch/${USER}/input_${2}.in"
+			i_dir=$2
+			shift 2 ;;
+		-f|--output-folder)
+			o_dir=$2
+			shift 2 ;;
+		-n|--num-requests)
+			count=$2
 			shift 2 ;;
 		-h|--help)
 			h=1
@@ -107,6 +119,8 @@ Options:
                              gen_small_workload.py, <conf> should look like:
                                  <num-requests>_<get-distribution>_<payload-size>, e.g.
                                  1000000_95_32, for 1000000 requests, of which 95% GETs, max size 32 bytes
+  -n, --num-requests=<N>     the number of requests to actually do, 1,000,000 by default
+  -f, --output-folder=<out>  use the specified output folder to 
   -h, --help                 display help
 "
 exit 0
@@ -117,6 +131,10 @@ R='\033[0;31m'
 C='\033[0;36m'
 NC='\033[0m'
 info() { echo -e "${C}===[INFO]=== ${1}${NC}"; }
+
+get_das5_node_ip() {
+	echo "10.149.0.${1}"
+}
 
 reserve_server_node() {
 	preserve -np 1 -t 28800 >/dev/null
@@ -139,7 +157,7 @@ get_node_num() {
 
 run_server() {
 	m=$1
-	ip=10.149.0.$2
+	ip=$2
 	rid=$3
 	port=20838
 	if [ "$m" == "0" ]; then
@@ -158,7 +176,7 @@ run_server() {
 
 run_server_perf() {
 	m=$1
-    ip=10.149.0.$2
+    ip=$2
     rid=$3
     port=20838
     if [ "$m" == "0" ]; then
@@ -175,19 +193,17 @@ run_server_perf() {
 
 run_clients_perf() {
 	m=$1
-    ip=10.149.0.$2
+    ip=$2
     port=20838
     num_p=$3
     num_n=$4
     count=$5
     if [ "$m" == "0" ]; then
 		run=$6
-        echo prun -$num_p -np $num_n -o ${o_dir}cl_cpu.mcd.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/client_mcd -a $ip -p $port -c $count -i $in_file
         prun -$num_p -np $num_n -o ${o_dir}cl_bm_cpu.mcd.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/client_mcd -a $ip -p $port -c $count -u -i $in_file
     else
         comp=$6
 		run=$7
-        echo prun -$num_p -np $num_n -o ${o_dir}cl_cpu.${in_conf}.${comp}.${num_p}_${num_n}.r$run perf stat ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file
         prun -$num_p -np $num_n -o ${o_dir}cl_bm_cpu.${comp}.${in_conf}.${num_p}_${num_n}.r$run perf stat ./bin/perk_client -r $comp -a $ip -p $port -c $count -u -i $in_file
     fi
 }
@@ -205,7 +221,7 @@ kill_server() {
 
 run_clients() {
 	m=$1
-	ip=10.149.0.$2
+	ip=$2
 	port=20838
 	num_p=$3
 	num_n=$4
@@ -213,32 +229,27 @@ run_clients() {
 	if [ "$m" == "0" ]; then
 		bm_type=$6
 		run=$7
-        echo "prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n}.r$run ./bin/client_mcd -a $ip -p $port -c $count -i $in_file"
         prun -$num_p -np $num_n -t 1800 -o ${o_dir}cl_${bm_type}.mcd.${in_conf}.${num_p}_${num_n}.r$run ./bin/client_mcd -a $ip -p $port -c $count -u -i $in_file
     else
         comp=$6
 		bm_type=$7
 		run=$8
-        echo "prun -$num_p -np $num_n -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n}.r$run ./bin/pears_client -r $comp -a $ip -p $port -c $count -i $in_file"
         prun -$num_p -np $num_n -t 1800 -o ${o_dir}cl_${bm_type}.${comp}.${in_conf}.${num_p}_${num_n}.r$run ./bin/perk_client -r $comp -a $ip -p $port -c $count -u -i $in_file
     fi
 }
 
-comps=(sd_sd wr_sd wr_wr wr_rd wrimm_sd)
-offset=9
-sizes=(32 64 128 256 512 1024 2048)
-#sizes=(2048)
 
 for csz in "${sizes[@]}"; do
 	vsz=`expr ${csz} - ${offset}`
-    in_file="/var/scratch/${USER}/input/input_3000000_${csz}_95_"
-	in_conf="3000000_${csz}_95"
+    in_file="${i_dir}input_${count}_${csz}_${distr_conf}_"
+	in_conf="${count_conf}_${csz}_${distr_conf}"
 	echo $in_file
 	for i in $(seq 1 $rerun); do
 		# reserve a node for the server
 		info "RESERVING NODE FOR SERVER, RUN $i SIZE $csz"
 		rid="$(reserve_server_node)"
 		node="$(get_node_num)"
+		sr_ip="$(get_das5_node_ip ${node})"
 		echo "acquired node, reservation id: ${rid}, node ${node}"
 		if [ "$bm_scale" == "1" ]; then
 			info "PREPARING BENCHMARKS"
@@ -254,15 +265,15 @@ for csz in "${sizes[@]}"; do
 						for proc in "${procs[@]}"
 						do
 							info "RUNNING PERK SERVER"
-							run_server 1 $node $rid $comp $core bm_scale $i
+							run_server 1 $sr_ip $rid $comp $core bm_scale $i
 							info "Running ops/sec benchmark with ${core}*${proc} clients"
-							run_clients 1 $node 2 16 $count $comp bm_scale $i
+							run_clients 1 $sr_ip 2 16 $count $comp bm_scale $i
 						done
 					else
 						info "RUNNING PERK SERVER"
-						run_server 1 $node $rid $comp $core bm_scale $i
+						run_server 1 $sr_ip $rid $comp $core bm_scale $i
 						info "Running ops/sec benchmark with $core clients"
-						run_clients 1 $node $core 1 $count $comp bm_scale $i
+						run_clients 1 $sr_ip $core 1 $count $comp bm_scale $i
 					fi
 				done
 			done
@@ -272,10 +283,10 @@ for csz in "${sizes[@]}"; do
 			for core in "${scale[@]}"
 			do
 				info "RUNNING MCD SERVER"
-				run_server 0 $node $rid bm_scale $scale $i
+				run_server 0 $sr_ip $rid bm_scale $scale $i
 				sleep 2
 				info "Running ops/sec benchmark with $core clients"
-				run_clients 0 $node $core 1 $count bm_scale $i
+				run_clients 0 $sr_ip $core 1 $count bm_scale $i
 				info "KILLING MCD SERVER"
 				kill_server 0 $rid
 				sleep 2
@@ -290,17 +301,16 @@ for csz in "${sizes[@]}"; do
 			for comp in "${comps[@]}"
 			do
 				info "RUNNING PERK SERVER"
-				run_server_perf 1 $node $rid $comp 1 bm_cpu $i
+				run_server_perf 1 $sr_ip $rid $comp 1 bm_cpu $i
 				info "RUNNING PERK CLIENT"
-				run_clients_perf 1 $node 1 1 $count $comp $i
+				run_clients_perf 1 $sr_ip 1 1 $count $comp $i
 			done
 			info "RUNNING MCD SERVER"
-			run_server_perf 0 $node $rid $i
+			run_server_perf 0 $sr_ip $rid $i
 			info "RUNNING MCD CLIENT"
-			run_clients_perf 0 $node 1 1 $count $i
+			run_clients_perf 0 $sr_ip 1 1 $count $i
 			kill_server 2 $rid
 		fi
-		count=1000000
 		if [ "$bm_latency" == "1" ]; then
 			info "PREPARING LATENCY BENCHMARK"
 			echo PERK_OVERRIDE_VALSIZE=${vsz} PERK_BM_SERVER_EXIT=1 PERK_BM_LATENCY=1 cmake .
@@ -310,17 +320,16 @@ for csz in "${sizes[@]}"; do
 			for comp in "${comps[@]}"
 			do
 				info "RUNNING PERK SERVER"
-				run_server 1 $node $rid $comp 1 bm_lat $i
+				run_server 1 $sr_ip $rid $comp 1 bm_lat $i
 				info "RUNNING PERK CLIENT"
-				run_clients 1 $node 1 1 $count $comp bm_lat $i
+				run_clients 1 $sr_ip 1 1 $count $comp bm_lat $i
 			done
 			info "RUNNING MCD SERVER"
-			run_server 0 $node $rid bm_lat 1 $i
+			run_server 0 $sr_ip $rid bm_lat 1 $i
 			info "RUNNING MCD CLIENT"
-			run_clients 0 $node 1 1 $count bm_lat $i
+			run_clients 0 $sr_ip 1 1 $count bm_lat $i
 			kill_server 0 $rid
 		fi
-		count=3000000
 		info "Cancelling server node reservation"
 		preserve -c ${rid}
 		rid=""

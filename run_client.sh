@@ -8,8 +8,8 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
     exit 1
 fi
 
-OPTIONS="a:p:ui:c:r:n:bh"
-LONGOPTS="addr:,port:,use-id,infile:,count:,rdma-comp:,node:,benchmark,help"
+OPTIONS="a:p:ui:c:r:n:h"
+LONGOPTS="addr:,port:,use-id,infile:,count:,rdma-comp:,node:,help"
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -29,7 +29,6 @@ possible_comps=["wr_sd","wrimm_sd","sd_sd","mcd","wr_rd","wr_wr"]
 
 addr_set=0
 while true && [ $# -gt 1 ]; do
-	#echo $1
 	case "$1" in
 		-a|--addr)
 			if [ $addr_set == 1]; then
@@ -72,9 +71,6 @@ while true && [ $# -gt 1 ]; do
 				addr_set=1
 			fi
 			shift 2 ;;
-		-b|--benchmark)
-			exe=./bin/pears_client_bm
-			shift ;;
 		-h|--help)
 			h=1
 			shift
@@ -95,6 +91,10 @@ then
 Options:
   -a, --addr=<IP>         server IP address (default: 0.0.0.0)
   -p, --port=<PORT>       server port (default: 20838)
+  -u, --use-id            use id given in the progname to read a certain file
+                          e.g. with a progname \"./perk_client.1.more.stuff\"
+                          with this option PERK clients will use the 1 and insert this 1
+                          in the filename given with the -i option: <IN>1.in
   -i, --infile=<IN>       input file containing key-value pairs
   -c, --count=<MAX>       maximum number of operations to perform (default: 5000000)
   -r, --rdma-comp=<COMP>  rdma composition, can be one of: (default: wr_wr)
