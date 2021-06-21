@@ -38,16 +38,16 @@ def main(argv):
 	try:
 		reqs = int(argv[0])
 		distr = float(argv[1])
-		payload_len = int(argv[2])
-		max_client_count = int(argv[3])
+		max_client_count = int(argv[2])
+		o_dir = argv[3]
 	except:
-		print("usage: \n\tpython3 gen_small_workload.py <REQUESTS> <GET_DISTRIBUTION> <PAYLOAD_SIZE> <MAX_CLIENTS>")
+		print("usage: \n\tpython3 gen_small_workload.py <REQUESTS> <GET_DISTRIBUTION> <MAX_CLIENTS> <OUTPUT_DIR>")
 		sys.exit(1)
-	# val len = total len - len(key) - sizeof(type) - 1 (null byte)
-	for sz in [32,64,128,256,512,1024,2048]: #,4096]:
+
+	for sz in [32,64,128,256,512,1024,2048]:
 		val_len = sz - 8 - 1 - 1
 		for i in range(0, max_client_count):
-			f = open(f"/var/scratch/{user}/input/input_{reqs}_{sz}_{int(distr*100)}_{i}.in", "w")
+			f = open(f"{o_dir}/input_{reqs}_{sz}_{int(distr*100)}_{i}.in", "w")
 			if f:
 				for r in request_gen(reqs, distr, val_len):
 					f.write(f'{r}\n')

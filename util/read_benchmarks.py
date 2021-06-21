@@ -105,7 +105,7 @@ def get_ops(o_f, mcd_check = False):
 		for line in f.readlines():
 			if mcd_check and 'processed' in line:
 				total = int(line.split(' ')[2])
-				if total % 3000000 != 0:
+				if total % 100000 != 0:
 					break
 			if '== benchmark' in line:
 				ops += float(line.split('[')[2].split(']')[0])
@@ -169,7 +169,6 @@ def read_scale(path, files):
 	for sz in szs:
 		rows = []
 		for np in nps:
-			#row = []
 			for k in cfgs:
 				kmin = min(results[k]['size'][sz]['cores'][str(np)])
 				kmax = max(results[k]['size'][sz]['cores'][str(np)])
@@ -180,7 +179,6 @@ def read_scale(path, files):
 					rows.append([k, np, r])
 		df = pd.DataFrame(data=rows, columns=['type', 'procs', 'ops'])
 		dfs.append(df)
-	print(diffs)
 	vardf = pd.DataFrame(data=diffs, columns=['type', 'max_diff'])
 	plot_variability_dist(vardf, None, 'var_dist_kde.svg')
 
@@ -191,13 +189,12 @@ def read_scale(path, files):
 		plot_scale(sorted_df, f'Scalability of PERK for payload size {szs[i]}', out_file=f'scale_{szs[i]}.svg')
 
 def plot_variability_dist(diffs, title, out_file=None):
-	#sg = sns.displot(diffs)
 	sg = sns.displot(data=diffs, x='max_diff', hue='type', kind='kde')
 
 	plt.xlabel('Maximum difference from the mean (%)')
 
 	if out_file != None:
-		f = sg# sg.get_figure()
+		f = sg
 		f.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
 
 def get_cpu(c_f):
@@ -282,7 +279,6 @@ def plot_lat(df, title, out_file=None):
 
 	sg.set(xlim = (0, None))
 	sg.set(ylim = (0, 30))
-	#sg.set_title(title)
 
 	plt.xlabel('Payload size (bytes)')
 	plt.ylabel('Latency (usec)')
@@ -297,7 +293,6 @@ def plot_cpu(df, title, out_file=None):
 	sg = sns.catplot(data=df, x='size', y='cpu', hue='type', kind='bar', ci='sd', alpha=.6, capsize=.1, errwidth=0.7)
 
 	sg.set_axis_labels('Payload size (bytes)','Cpu cycles')	
-	#sg.legend.set_title('Title')
 
 	if out_file != None:
 		sg.savefig(f'{out_file}', dpi=400, bbox_inches="tight")
@@ -313,7 +308,7 @@ def main(argv):
 	bm_lat = [f for f in files if 'cl_bm_lat' in f]
 	bm_cpu = [f for f in files if 'cpu' in f]
 
-	#read_cpu(path, bm_cpu)
+	read_cpu(path, bm_cpu)
 	read_lat(path, bm_lat)
 	read_scale(path, bm_scale)
 	
