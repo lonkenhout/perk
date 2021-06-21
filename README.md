@@ -51,13 +51,13 @@ For extra functionality you can pass in temporary environment variables, current
 
 How to pass these variables?
 
-`PERK_BM_OPS_PER_SEC=1 PERK_BM_SERVER_EXIT=1 cmake .`
+`PERK_BM_OPS_PER_SEC=1 PERK_BM_SERVER_EXIT=1 cmake .`\
 `make`
 
 
 ## Run
 ### Workloads
-- For generating a sample workload for 1 or multiple clients:
+- For generating a sample workload for 1 or multiple clients:\
 `python3 gen_small_workload.py <REQUESTS> <GET_DISTRIBUTION> <MAX_CLIENTS> <OUTPUT_DIR>`
 
 e.g.:
