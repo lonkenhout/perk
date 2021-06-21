@@ -190,70 +190,122 @@ typedef struct perk_client_collection{
 
 #define REQ_NOTIFY_FILTER (0)
 
-/* some permissions for the shared mem, local read is enabled by default */
+/* some permissions for the shared memory, local read is enabled by default */
 #define PERM_L_RW (IBV_ACCESS_LOCAL_WRITE) 
 #define PERM_R_W (IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE)
 #define PERM_R_RW (IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ)
 #define PERM_RA_W (IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_ATOMIC)
 #define PERM_RA_RW (IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC)
 
-/* server side functions */
+/*** server side functions ***/
+/* create event channel, cid, bind to the address in psc and start listening */
 int init_server_dev(PERK_SVR_CTX *psc);
-int wait_for_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn);
+
+/* allocates protection domain, completion channel and queue, queue pair, registers memory with RNIC */
 int init_server_client_resources(PERK_CLIENT_CONN *pc_conn);
+
+/* accepts a clients connection */
 int accept_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn);
+
+/* copies peer address and prints the address:ip pair of the newly connected client */
 int finalize_client_conn(PERK_CLIENT_CONN *pc_conn);
+
+/* cleans up resources for a client table entry */
 int disconnect_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn);
+
+/* destroy any leftover server resources */
 int destroy_server_dev(PERK_SVR_CTX *psc);
+
+/* sends WRITE/READ memory to the client */
 int send_md_s2c(PERK_CLIENT_CONN *pc_conn);
 
+/* find free entry in the client table */
 int client_coll_find_free(PERK_CLIENT_COLL *conns);
+
+/* find client table entry for specific client */
 int client_coll_find_conn(PERK_CLIENT_COLL *conns, struct sockaddr *addr);
 
-/* client side functions */
+/*** client side functions ***/
+/* initialize event channel, cid, request initial connection to server */
 int init_client_dev(PERK_CLT_CTX *pcc, struct sockaddr_in *svr_sa);
+
+/* pre post recv for exchanging WRITE/READ memory information */
 int client_pre_post_recv_buffer(PERK_CLT_CTX *pcc);
+
+/* establish connection with server */
 int connect_to_server(PERK_CLT_CTX *pcc);
+
+/* send metadata of WRITEable memory to server and receive metadata of server-side memory */
 int send_md_c2s(PERK_CLT_CTX *pcc);
-int rdma_write_c2s(PERK_CLT_CTX *pcc);
-int rdma_write_c2s_non_block(PERK_CLT_CTX *pcc);
+
+/* disconnect from the server and clean up resources */
 int client_disconnect(PERK_CLT_CTX *pcc);
 
 /* shared functions */
+/* prepare somme initial attributes for a standard queue pair */
 void qp_init_attr_prepare(struct ibv_qp_init_attr *qp_attr, struct ibv_cq *cq);
+
+/* setup a metadata struct with the given ibv memory and register the metadata with the RNIC */
 struct ibv_mr *setup_md_attr(struct ibv_pd *pd, struct rdma_buffer_attr *attr, struct ibv_mr *mr);
 
-int rdma_post_recv(struct ibv_mr *mr, struct ibv_qp *qp);
-int rdma_post_send(struct ibv_mr *mr, struct ibv_qp *qp);
-
+/* prepare a recv work request */
 void rdma_recv_wr_prepare(struct ibv_recv_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr);
+
+/* post a pre-prepared recv work request */
 int rdma_post_recv_reuse(struct ibv_recv_wr *wr, struct ibv_qp *qp);
 
+/* prepare a send work request */
 void rdma_send_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr);
+
+/* post a pre-prepared send work request */
 int rdma_post_send_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp);
 
+/* prepare a write with immediate work request */
 void rdma_write_imm_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
+
+/* prepare  a write work request */
 void rdma_write_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
+
+/* prepare a read work request */
 void rdma_read_wr_prepare(struct ibv_send_wr *wr, struct ibv_sge *sg, struct ibv_mr *mr, struct rdma_buffer_attr r_attr);
+
+/* post a pre-prepared WRITE/READ/WRIMM work request */
 int rdma_post_write_reuse(struct ibv_send_wr *wr, struct ibv_qp *qp);
 
+/* clear the completion queue (necessary for freeing) */
 int rdma_clear_cq(struct ibv_cq *cq);
 
-struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd, void *addr, uint32_t length, enum ibv_access_flags perm);
-
+/* try receiving a specific connection management event */
 int rdma_cm_event_rcv(struct rdma_event_channel *ec,
 					enum rdma_cm_event_type e_type,
 					struct rdma_cm_event **cme);
+
+/* try receiving any connection management event */
 int rdma_cm_event_rcv_any(struct rdma_event_channel *ec,
 					struct rdma_cm_event **cme);
+
+/* spin on the completion queue until the specific number of work completions are found */
 int rdma_spin_cq(struct ibv_cq *cq, struct ibv_wc *wc, int max_wc);
+
+/* poll on the completion queue until the specific number of work completions are found with timeout */
 int rdma_poll_cq(struct ibv_cq *cq, struct ibv_wc *wc, int max_wc, useconds_t timeout);
+
+/* validate work completions */
 int validate_wcs(struct ibv_wc *wc, int tot);
+
+/* allocate and register a memory buffer */
 struct ibv_mr* rdma_buffer_alloc(struct ibv_pd *pd, uint32_t len, enum ibv_access_flags perm);
+
+/* register a memory buffer */
 struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd, void *addr, uint32_t len, enum ibv_access_flags perm);
+
+/* deregister and free a memory buffer */
 void rdma_buffer_free(struct ibv_mr *mr);
+
+/* deregister a memory buffer */
 void rdma_buffer_deregister(struct ibv_mr *mr);
 
+/* set completion channel to non-blocking mode */
 int set_comp_channel_non_block(struct ibv_comp_channel *io_cc);
 
 /* extra stuff */
