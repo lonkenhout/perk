@@ -319,6 +319,8 @@ int main(int argc, char **argv){
 	
 	/* prepare server resources and parse program arguments */
 	psc = (PERK_SVR_CTX *)calloc(1, sizeof(*psc));
+	psc->config.client = default_client_rdma_config;
+    psc->config.client = default_server_rdma_config;
 
 	int res = parse_opts(argc, argv);
 	if(res != 0){

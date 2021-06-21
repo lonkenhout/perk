@@ -54,7 +54,7 @@ enum __attribute__ ((__packed__)) REQUEST_TYPE {
 #define MAX_VAL_SIZE (PERK_OVERRIDE_VALSIZE)
 
 #else
-#define MAX_VAL_SIZE (23+32+64+128+256+512+1024)
+#define MAX_VAL_SIZE (23)
 #endif
 
 #define MAX_LINES (1)
