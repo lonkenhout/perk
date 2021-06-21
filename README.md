@@ -32,33 +32,51 @@ For installing locally (without sudo), choose installation location:
 `./configure --prefix=/home/$USER/local && make && make install`
 
 #### Configuration
-Cmake expects either a globally installed installation (found through regular system variables), or if you have trouble, you can manually set an environment variable: `LIBMEMCACHED_PATH=/home/$USER/libmemcached-1.0.18`, e.g. if you have the source code in your home dir. Then
+Cmake expects either a globally installed installation (found through regular system variables), or if you have trouble, you can manually set an environment variable: `LIBMEMCACHED_PATH=/home/$USER/libmemcached-1.0.18`, e.g. if you have the source code in your home dir. 
+Then for actually generating build files and compiling:
 
 `cmake .` for config
+`[ENV] cmake .` for advanced config, see below
 
 `make` for compilation and linking
 
+#### Extra functionality through [ENV]
 For extra functionality you can pass in temporary environment variables, currently, there are multiple for benchmarking purposes:
 - `PERK_DEBUG=1`, turns on debugging prints
 - `PERK_BM_LATENCY=1`, turns on latency macros (prints latency client side)
 - `PERK_BM_OPS_PER_SEC=1`, turns on ops/sec macros (prints ops per sec client and server side)
 - `PERK_BM_SERVER_EXIT=1`, server exits after all clients disconnect
+- `PERK_PRINT_REQUESTS=1`, turns on request printing client-side
+- `PERK_OVERRIDE_VALSIZE=<VAL>`, overrides the maximum value size of PERK (utility for benchmark setups)
 
-How to pass them?
-`PERK_BM_OPS_PER_SEC=1 PERK_BM_SERVER_EXIT=1 cmake .
-make`
+How to pass these variables?
+
+`PERK_BM_OPS_PER_SEC=1 PERK_BM_SERVER_EXIT=1 cmake .`
+`make`
 
 
 ## Run
-- `python[3] gen_small_workload.py` for generating a small sample workload
-- `bin/pears_server [ARGS]` for running server (-h for help)
-- `bin/pears_client [ARGS]` for running client (-h for help)
+### Workloads
+- For generating a sample workload for 1 or multiple clients:
+`python3 gen_small_workload.py <REQUESTS> <GET_DISTRIBUTION> <MAX_CLIENTS> <OUTPUT_DIR>`
+
+e.g.:
+`python3 gen_small_workload.py 1000000 0.95 16 /var/scratch/$USER/input`, this generates 16 1,000,000-request files with a GET/SET ratio of 95:5 and stores them in the folder /var/scratch/$USER/input.
+
+### Actually running
+Running the server:
+`./bin/perk_server [ARGS]`
+
+Running the client:
+`./bin/perk_client [ARGS]`
+
+
 
 Or you can use the run scripts, which supply the executables with a number of default arguments.
 - `./run_server.sh`, try `./run_server.sh -h` for options
 - `./run_client.sh`, try `./run_client.sh -h` for options
 
-Currently, the default options are 5,000,000 requests, using RDMA write/send setup.
+Currently, the default options are 3,000,000 requests, using RDMA write/send setup.
 
 ## Run on DAS5
 This section only applies if you have access to one of the DAS5 clusters:
