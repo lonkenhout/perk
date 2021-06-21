@@ -1,0 +1,2 @@
+[*.{c,h,py}]
+indent_size = 4
