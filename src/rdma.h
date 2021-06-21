@@ -14,6 +14,7 @@
 #include <infiniband/verbs.h>
 #include <rdma/rdma_cma.h>
 
+/* attribute from code example: https://github.com/animeshtrivedi/rdma-example */
 struct __attribute((packed)) rdma_buffer_attr {
   uint64_t address;
   uint32_t length;
@@ -25,7 +26,7 @@ struct __attribute((packed)) rdma_buffer_attr {
   }stag;
 };
 
-
+/* rdma setup for client- or server-side */
 enum RDMA_COMBINATION {
 	RDMA_COMBO_WR,
 	RDMA_COMBO_WRIMM,
@@ -33,16 +34,17 @@ enum RDMA_COMBINATION {
 	RDMA_COMBO_RD,
 };
 
-
+/* structure for managing configuration internally */
 struct verb_rdma_config{
 	enum RDMA_COMBINATION		client;
 	enum RDMA_COMBINATION		server;
 };
 
-/* standard rdma configuration, determines how memory is registered */
+/* standard rdma configurations, determines how memory is registered */
 static enum RDMA_COMBINATION default_client_rdma_config = RDMA_COMBO_WR;
 static enum RDMA_COMBINATION default_server_rdma_config = RDMA_COMBO_SD;
 
+/* server-side resources */
 typedef struct perk_server_context{
 	struct sockaddr_in			server_sa;
 	
@@ -60,6 +62,7 @@ typedef struct perk_server_context{
 	uint32_t			total_ops;
 } PERK_SVR_CTX;
 
+/* very bulky struct for managing all client-side resources */
 typedef struct perk_client_context{
 	int rcv_ps;
 	uint32_t cid;
@@ -121,6 +124,7 @@ typedef struct perk_client_context{
 	int 						max_reqs;
 } PERK_CLT_CTX;
 
+/* another bulky struct for managing a single connection server-side */
 typedef struct perk_client_conn{
 	struct sockaddr_in			client_sa;
 	struct sockaddr				*addr;
@@ -165,6 +169,7 @@ typedef struct perk_client_conn{
 	struct ibv_send_wr			rd_wr;
 } PERK_CLIENT_CONN;
 
+/* client table */
 #define MAX_CLIENTS (64)
 typedef struct perk_client_collection{
 	int 					active[MAX_CLIENTS];

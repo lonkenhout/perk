@@ -1,14 +1,17 @@
 #ifndef __PERK_BENCHMARK_H__
 #define __PERK_BENCHMARK_H__
 
-/* definitions created by cmake for choosing benchmarks */
+/* definitions created by cmake for choosing benchmarks
+ * by adding environment variable these can be enabled and disabled,
+ * the compiler can then remove these macros if they are defined
+ * as empty macros, thus not having any impact on performance */
+
 /* for making server exit after all clients disconnect */
 #ifdef BM_SERVER_EXIT
 #define PERK_SERVER_EXIT_ON_DC 1
 
 #else
 #define PERK_SERVER_EXIT_ON_DC 0
-
 #endif
 
 /* benchmark for latency */
@@ -35,6 +38,7 @@
 #define bm_ops_show(o, t_s, t_e)
 #endif
 
+/* count and print the number of READs, this has to be enabled manually */
 //#define BM_COUNT_READS 1
 #ifdef BM_COUNT_READS
 #define bm_reads_incr(c) incr_num(c);

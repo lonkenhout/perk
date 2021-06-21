@@ -80,34 +80,64 @@ struct request{
 #endif
 
 
-
+/* parse a get request from a raw string into a key buffer */
 int parse_get_request(char *request, 
 				char *k, size_t k_sz);
+
+/* parse a put request from a raw string into key-value buffers */
 int parse_put_request(char *request, 
 				char *k, size_t k_sz,
 				char *v, size_t v_sz);
+
+/* check request type of raw buffer and parse the request based on that */
 int parse_request(char *request, 
 				char *k, size_t k_sz,
 				char *v, size_t v_sz);
 
-
+/* get a line from stdin */
 int get_line(char *buff);
+
+/* get a line from input_file and place it in *buff */
 int get_file_line(FILE *input_file, char **buff);
 
+/* convert readable ip address to sockaddr */
 int get_addr(char *dst, struct sockaddr *addr);
+
+/* convert sockaddr to readable ip address */
 int get_addr_port(char *res, struct sockaddr *addr);
+
+/* checks if two sockaddr's are equal, returns 0 if equal, 1 otherwise */
 int addr_eq(struct sockaddr *addr1, struct sockaddr *addr2);
 
+/* store wallclocktime in t */
 void get_time(struct timeval *t);
+
+/* print the time difference between two wallclock measurements in microseconds */
 void print_time_diff(char *msg, struct timeval t_s, struct timeval t_e);
+
+/* print the time difference between two wallclock measurements in nanoseconds */
+void print_time_diff_nano(char *msg, struct timeval t_s, struct timeval t_e);
+
+/* print the number of operations per second given two wallclock measurements */
 void print_ops_per_sec(uint64_t ops, struct timeval t_s, struct timeval t_e);
+
+/* increment integer pointed to by c */
 void incr_num(uint64_t *c);
 
+/* convert req type enum to string */
 char *req_type_str(enum REQUEST_TYPE type);
+
+/* print a request */
 void print_request(struct request req, struct request res);
+
+/* compute the time between start and end on the given scale */
 double compute_time(struct timeval start, struct timeval end, double scale);
+
+/* debug function used for printing the current time */
 void print_curr_time(void);
 
+/* macro for printing requests that can be enabled through environment variables
+ * passed to cmake when generating build files */
 #ifdef PERK_PRINT_REQUESTS
 #define print_req(req, res) print_request(req, res);
 #else
