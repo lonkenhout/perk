@@ -94,7 +94,7 @@ This section only applies if you have access to one of the DAS5 clusters:
 3. `./run_client.sh -n <N> -r <comp>`, where N is the node number (substitutes in a default ib address), check `./run_client.sh -h` for example comps and other options.
 
 ### Benchmarking
-Benchmarking everything easily is only going to work on DAS5: [https://www.cs.vu.nl/pub/das5/users.shtml]().
+Benchmarking everything easily is only going to work on DAS5: [cs.vu.nl/pub/das5/users.html]().
 To benchmark the application, you will probably need some sample workloads, unless you like benchmarking on GET requests that will always return an empty result. Otherwise generating input files is a good idea. Personally, I like 3,000,000 requests, with a 95:5 ratio for GET/SETs. The utility script can automatically generate files for different clients and different payloads [32, 64, 128, 256, 512, 1024, 2048] are included by default, if you want to modify this you'll have to do it manually in the script.\
 `python3 gen_small_workload.py 3000000 0.95 16 /var/scratch/$USER/input`\
 
