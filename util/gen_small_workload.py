@@ -2,6 +2,7 @@ import string
 import random
 import sys
 import getpass
+from os.path import isfile, join
 
 def key_gen(ext_len = 3):
     return 'key'+''.join(random.choices(string.digits, k=ext_len))
@@ -44,10 +45,14 @@ def main(argv):
 		print("usage: \n\tpython3 gen_small_workload.py <REQUESTS> <GET_DISTRIBUTION> <MAX_CLIENTS> <OUTPUT_DIR>")
 		sys.exit(1)
 
+
 	for sz in [32,64,128,256,512,1024,2048]:
 		val_len = sz - 8 - 1 - 1
 		for i in range(0, max_client_count):
-			f = open(f"{o_dir}/input_{reqs}_{sz}_{int(distr*100)}_{i}.in", "w")
+			try:
+				f = open(join(o_dir, "input_{reqs}_{sz}_{int(distr*100)}_{i}.in"), "w")
+			except:
+				print(f'error: something went wrong while opening {f}')
 			if f:
 				for r in request_gen(reqs, distr, val_len):
 					f.write(f'{r}\n')
