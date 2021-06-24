@@ -8,9 +8,6 @@ static struct ck_hash_table *ct = NULL;
 static PERK_SVR_CTX *psc = NULL;
 static PERK_CLIENT_COLL *conns = NULL;
 
-/* mutex for performing put requests from a worker */
-static pthread_mutex_t pmutex;
-static pthread_rwlock_t plock;
 
 /* usage */
 void print_usage(char *cmd){
@@ -174,7 +171,6 @@ int process_cm_event(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns)
 			} else {
 				ret = -2;
 			}
-			//set_comp_channel_non_block(pc_conn->io_cc);
 			break;
 		case RDMA_CM_EVENT_ESTABLISHED:
 			debug("processing established request\n");
@@ -235,8 +231,6 @@ void server(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns)
 	/* setup resources */
 	struct epoll_event ev, events[MAX_EVENTS];
 	int epollfd, n_fds;
-	pthread_rwlock_init(&plock, NULL);
-	pthread_mutex_init(&pmutex, NULL);
 	struct timeval start, end;
 	int i, res = 0, done = 0;
 
@@ -302,8 +296,6 @@ void server(PERK_SVR_CTX *psc, PERK_CLIENT_COLL *conns)
 		if(stop) break;
 
     }
-	pthread_mutex_destroy(&pmutex);
-    pthread_rwlock_destroy(&plock);
     destroy_server_dev(psc);
 	perk_kv_destroy();
 	free(psc);

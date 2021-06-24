@@ -171,7 +171,7 @@ int main(int argc, char **argv){
 		get_cid(argv[0]);
 		char final_file[100] = {0,};
 		snprintf(final_file, sizeof(final_file), "%s%d.in", file_name, pcc->cid);
-		printf("Client %lu using file %s\n", pcc->cid, final_file);
+		debug("Client %lu using file %s\n", pcc->cid, final_file);
 		fflush(stdout);
 		open_file(final_file);
 	} else if(file_name) {

@@ -69,6 +69,7 @@ int parse_opts(int argc, char **argv){
         return ret;
 }
 
+/* query total operations done from server */
 uint64_t get_mcd_ops(memcached_st *memc)
 {
 	uint64_t ops = 0;
@@ -194,7 +195,6 @@ int main(int argc, char **argv) {
 		bm_latency_start(&l_s);
 		switch(req) {
 			case GET:
-				//rc = memcached_mget(memc, (const char * const*)&key, &key_length, 1);
 				ret_value = memcached_get(memc, key, key_length, &ret_value_len, NULL, &rc);
 				if(rc != MEMCACHED_SUCCESS && rc != MEMCACHED_NOTFOUND) {
 					fprintf(stderr, "memcached_mget() failed: %s\n", memcached_strerror(memc, rc));
@@ -202,18 +202,6 @@ int main(int argc, char **argv) {
 				bm_latency_end(&l_e);
 				bm_latency_show("mcd", l_s, l_e);
 				free(ret_value);
-				/*char ret_key[MEMCACHED_MAX_KEY];
-				memset(ret_key, 0, sizeof(ret_key));
-				size_t ret_key_len;
-				char *ret_value;
-				size_t ret_value_len;
-				while((ret_value = memcached_fetch(memc, ret_key, &ret_key_len, &ret_value_len, &flags, &rc))) {
-					if(rc != MEMCACHED_SUCCESS) {
-						printf("error retrieving value for key\n"); break;
-					} 
-					free(ret_value);
-					memset(ret_key, 0, sizeof(ret_key));
-				}*/
 				break;
 			default:
 				rc = memcached_set(memc, key, key_length, value, strlen(value), 0, 0);

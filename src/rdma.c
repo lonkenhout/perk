@@ -240,7 +240,6 @@ int send_md_s2c(PERK_CLIENT_CONN *pc_conn)
 	}
 
 	/* prepost a recv for write with IMM/send */
-	//TODO: setup up better system to check if this is necessary
 	pc_conn->imm_data = rdma_buffer_alloc(pc_conn->pd, MAX_IMM_SIZE, PERM_L_RW);
 	if(pc_conn->config.client == RDMA_COMBO_WRIMM){
 		ret = rdma_post_recv(pc_conn->imm_data, pc_conn->qp);
@@ -259,7 +258,6 @@ int send_md_s2c(PERK_CLIENT_CONN *pc_conn)
 		return -errno;
 	}
 
-	//TODO: remove this code
 	/* setup attributes to send to client*/
 	pc_conn->server_rd_md_mr = setup_md_attr(pc_conn->pd, &(pc_conn->server_rd_md_attr), pc_conn->sd_response_mr);
 	if(!pc_conn->server_rd_md_mr) {
@@ -302,7 +300,6 @@ int disconnect_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 	}
 
 	if(pc_conn->server_buf != NULL) rdma_buffer_free(pc_conn->server_buf);
-	//if(pc_conn->response_mr != NULL)rdma_buffer_free(pc_conn->response_mr);
 	if(pc_conn->imm_data != NULL)rdma_buffer_free(pc_conn->imm_data);
 	if(pc_conn->md != NULL) rdma_buffer_deregister(pc_conn->md);
 	if(pc_conn->server_md != NULL) rdma_buffer_deregister(pc_conn->server_md);
@@ -321,7 +318,6 @@ int disconnect_client_conn(PERK_SVR_CTX *psc, PERK_CLIENT_CONN *pc_conn)
 int destroy_server_dev(PERK_SVR_CTX *psc)
 {
 	
-	//TODO: free any QP and ACK all related events before this function call
 	int ret = rdma_destroy_id(psc->cm_sid);
 	if(ret) {
 		log_err("rdma_destroy_id() failed");

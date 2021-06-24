@@ -185,7 +185,6 @@ int client(PERK_CLT_CTX *pcc)
 	int count = 0;
 	bm_ops_start(&t_s);
 
-	// test
 	pcc->sd_request.rid = 0;
 	/* do the same request max_reqs times */
 	while(count < pcc->max_reqs) {
@@ -195,9 +194,11 @@ int client(PERK_CLT_CTX *pcc)
 			exit(1);
 		}
 		bm_latency_start(&start);
+
 		if(send_request(pcc)) return 1;
 		if(recv_response(pcc)) return 1;
 		count++;
+
 		bm_latency_end(&end);
 		bm_latency_show("comp", start, end);
 		print_req(pcc->sd_request, pcc->sd_response);

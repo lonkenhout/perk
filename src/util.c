@@ -60,7 +60,7 @@ int parse_get_request(char *request,
 }
 
 
-
+/* get input line, cleans ANSI escape chars such left-key, right-key, etc */
 int get_line(char *buff)
 {
 	int ch, extra, i;
